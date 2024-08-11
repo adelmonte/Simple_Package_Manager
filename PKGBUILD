@@ -1,3 +1,4 @@
+# Maintainer: adelmonte <https://github.com/adelmonte>
 pkgname=spm
 pkgver=1.0.0
 pkgrel=1
