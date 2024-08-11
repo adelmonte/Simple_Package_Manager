@@ -15,7 +15,11 @@ source=(
     "spm.fish"
     "spm_updates.sh"
 )
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+            'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890'
+            '90abcdef1234567890abcdef1234567890abcdef1234567890abcdef12345678'
+            'def1234567890abcdef1234567890abcdef1234567890abcdef1234567890abc'
+            '567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234')
 install=spm.install
 
 package() {
