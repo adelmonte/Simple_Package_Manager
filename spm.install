@@ -1,0 +1,17 @@
+post_install() {
+    echo "SPM has been installed. To complete the setup, run the following commands as needed:"
+    echo
+    echo "After running these commands, you can use SPM commands (install, remove, orphan) by typing them in your terminal."
+    echo "See "spm --help" for more info."
+    echo
+    echo "1. For Bash users:"
+    echo "echo 'source /usr/bin/spm' >> ~/.bashrc"
+    echo
+    echo "2. For Fish users:"
+    echo "echo 'source /usr/share/fish/vendor_functions.d/spm.fish' >> ~/.config/fish/config.fish"
+    echo
+    echo "3. To enable available update checking:"
+    echo "sudo systemctl enable --now spm_updates.timer"
+    echo "sudo systemctl enable --now spm_updates.service"
+    echo
+}
