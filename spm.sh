@@ -104,19 +104,31 @@ install() {
     clear_screen
     echo "Loading packages... This may take a moment."
     local search_query="$1"
-    local fzf_cmd="fzf --reverse --multi --ansi --preview 'yay -Si {1}' --header 'Select packages to install
+    local fzf_cmd="fzf --reverse --multi --preview '
+        if pacman -Qi {1} &>/dev/null; then
+            echo \"Package Info (installed):\"
+            yay -Qi {1}
+            echo
+            echo \"Installed Files:\"
+            pacman -Ql {1} | grep -v \"/$\" | cut -d\" \" -f2-
+        else
+            echo \"Package Info (not installed):\"
+            yay -Si {1}
+            echo
+            echo \"Files that would be installed:\"
+            yay -Fl {1} 2>/dev/null | awk '\''{print $2}'\'' || echo \"File list not available\"
+        fi
+    ' --preview-window=right:60%:wrap --header 'Select packages to install
 (TAB to select, ENTER to confirm, Ctrl+C to return)' --bind 'ctrl-c:abort'"
     
     # Get exact repository order from pacman.conf
     local repo_order=$(grep '^\[.*\]' /etc/pacman.conf | grep -v '^\[options\]' | sed 's/[][]//g')
     
-    # Get list of all available packages
-    local package_list=$(yay -Sl | awk '{print $2 " " $1}')
-    
-    # Get list of installed packages
+    # Get list of all available packages and installed packages
+    local package_list=$(yay -Sl)
     local installed_packages=$(pacman -Qq)
     
-    # Sort package list based on exact repository order and add [INSTALLED] identifier
+    # Sort package list based on repository order and installation status
     local sorted_package_list=$(echo "$package_list" | awk -v repo_order="$repo_order" -v installed="$installed_packages" '
     BEGIN {
         split(repo_order, repos)
@@ -129,22 +141,22 @@ install() {
         }
     }
     {
-        package = $1
-        repo = $2
+        repo = $1
+        package = $2
         priority = (repo in repo_priority) ? repo_priority[repo] : 999
         if (package in is_installed) {
-            printf "%03d %s %s [INSTALLED]\n", priority, package, repo
+            printf "0%03d %-50s %-20s [INSTALLED]\n", priority, package, repo
         } else {
-            printf "%03d %s %s\n", priority, package, repo
+            printf "1%03d %-50s %-20s\n", priority, package, repo
         }
     }' | sort -n | cut -d' ' -f2-)
     
     # Use fzf to select packages, with initial query if provided
     local selected_packages
     if [ -n "$search_query" ]; then
-        selected_packages=$(echo "$sorted_package_list" | column -t | eval "$fzf_cmd -q \"$search_query\"" | awk '{print $1}')
+        selected_packages=$(echo "$sorted_package_list" | eval "$fzf_cmd -q \"$search_query\"" | awk '{print $1}')
     else
-        selected_packages=$(echo "$sorted_package_list" | column -t | eval "$fzf_cmd" | awk '{print $1}')
+        selected_packages=$(echo "$sorted_package_list" | eval "$fzf_cmd" | awk '{print $1}')
     fi
     
     if [ -n "$selected_packages" ]; then
@@ -164,12 +176,18 @@ install() {
 remove() {
     clear_screen
     local search_query="$1"
-    local fzf_cmd="fzf --reverse --multi --preview 'yay -Qi {1}' --header 'Select packages to remove
+    local fzf_cmd="fzf --reverse --multi --preview '
+        echo \"Package Info:\"
+        yay -Qi {1}
+        echo
+        echo \"Installed Files:\"
+        pacman -Ql {1} | grep -v \"/$\" | cut -d\" \" -f2-
+    ' --preview-window=right:60%:wrap --header 'Select packages to remove
 (TAB to select, ENTER to confirm, Ctrl+C to return)' --bind 'ctrl-c:abort'"
-
+    
     # List all installed packages, including dependencies
     local package_list=$(pacman -Qq)
-
+    
     # Use fzf to select packages, with initial query if provided
     local selected_packages
     if [ -n "$search_query" ]; then
@@ -191,22 +209,27 @@ remove() {
     manager
 }
 
+
 # Explore Dependencies
 explore_dependencies() {
-    clear_screen
-    echo "Explore Dependencies"
-    echo "-------------------"
-    echo "Use this function to explore package dependencies."
-    echo "Press Ctrl+C to return to the Dependencies Menu at any time."
-    echo
+    while true; do
+        clear_screen
+        echo "Explore Dependencies"
+        echo "-------------------"
+        echo "Use this function to explore package dependencies."
+        echo "Press Ctrl+C to return to the Dependencies Menu at any time."
+        echo
 
-    local fzf_cmd="fzf --reverse --preview 'echo \"Package: {1}\"; echo \"Description: \$(pacman -Qi {1} | grep \"Description\" | cut -d\":\" -f2)\"; echo; echo \"Required By:\"; pacman -Qi {1} | grep \"Required By\" | cut -d\":\" -f2 | tr \" \" \"\n\" | sed \"s/^/  /\"' --header '(Ctrl+C to return)' --bind 'ctrl-c:abort'"
+        local fzf_cmd="fzf --reverse --preview 'echo \"Package: {1}\"; echo \"Description: \$(pacman -Qi {1} | grep \"Description\" | cut -d\":\" -f2)\"; echo; echo \"Required By:\"; pacman -Qi {1} | grep \"Required By\" | cut -d\":\" -f2 | tr \" \" \"\n\" | sed \"s/^/  /\"' --header '(Ctrl+C to return)' --bind 'ctrl-c:abort'"
 
-    # List only dependency packages
-    local package_list=$(pacman -Qd | awk '{print $1}')
-    local selected_package=$(echo "$package_list" | eval "$fzf_cmd")
-    
-    if [ -n "$selected_package" ]; then
+        # List only dependency packages
+        local package_list=$(pacman -Qd | awk '{print $1}')
+        local selected_package=$(echo "$package_list" | eval "$fzf_cmd")
+        
+        if [ -z "$selected_package" ]; then
+            return
+        fi
+
         clear_screen
         echo "Package: $selected_package"
         echo "Description: $(pacman -Qi $selected_package | grep "Description" | cut -d":" -f2)"
@@ -214,34 +237,35 @@ explore_dependencies() {
         echo "Required By:"
         pacman -Qi $selected_package | grep "Required By" | cut -d":" -f2 | tr " " "\n" | sed "s/^/  /"
         echo
-        handle_return
-    else
-        clear_screen
-        dependencies_menu
-    fi
+        read -n 1 -s -r -p "Press any key to continue exploring or Ctrl+C to return to the Dependencies Menu"
+    done
 }
 
 # Sort Packages by Dependencies Count
 sort_packages() {
-    clear_screen
-    local temp_file=$(mktemp)
-    echo "Analyzing dependencies... This may take a moment."
-    
-    # Get all packages and their dependency counts
-    pacman -Qq | while read -r pkg; do
-        # Count the number of dependencies, subtracting 1 to exclude the package itself from the count
-        local dep_count=$(pactree -d 1 -u "$pkg" 2>/dev/null | tail -n +2 | wc -l)
-        # Pad the dependency count to ensure proper numerical sorting
-        printf "%03d %s\n" "$dep_count" "$pkg"
-    done | sort -rn > "$temp_file"
-    
-    echo # New line after progress dots
+    while true; do
+        clear_screen
+        local temp_file=$(mktemp)
+        echo "Analyzing dependencies... This may take a moment."
+        
+        # Get all packages and their dependency counts
+        pacman -Qq | while read -r pkg; do
+            local dep_count=$(pactree -d 1 -u "$pkg" 2>/dev/null | tail -n +2 | wc -l)
+            printf "%03d %s\n" "$dep_count" "$pkg"
+        done | sort -rn > "$temp_file"
+        
+        echo # New line after progress dots
 
-    local fzf_cmd="fzf --reverse --preview 'echo \"Package: {2}\"; echo \"Direct Dependencies: {1}\"; echo; echo \"Description: \$(pacman -Qi {2} | grep \"Description\" | cut -d\":\" -f2)\"; echo; echo \"Direct Dependencies:\"; pactree -d 1 -u {2} 2>/dev/null | tail -n +2 | sed \"s/^/  /\"; echo; echo \"Optional Dependencies:\"; pacman -Qi {2} | grep -A 100 \"Optional Deps\" | sed -n \"/Optional Deps/,/^$/p\" | sed \"1d;$d\" | sed \"s/^/  /\"' --header 'Sorted by number of direct dependencies.
+        local fzf_cmd="fzf --reverse --preview 'echo \"Package: {2}\"; echo \"Direct Dependencies: {1}\"; echo; echo \"Description: \$(pacman -Qi {2} | grep \"Description\" | cut -d\":\" -f2)\"; echo; echo \"Direct Dependencies:\"; pactree -d 1 -u {2} 2>/dev/null | tail -n +2 | sed \"s/^/  /\"; echo; echo \"Optional Dependencies:\"; pacman -Qi {2} | grep -A 100 \"Optional Deps\" | sed -n \"/Optional Deps/,/^$/p\" | sed \"1d;$d\" | sed \"s/^/  /\"' --header 'Sorted by number of direct dependencies.
 (Ctrl+C to return)' --bind 'ctrl-c:abort'"
-    
-    local selected_package=$(cat "$temp_file" | eval "$fzf_cmd" | awk '{print $2}')
-    if [ -n "$selected_package" ]; then
+        
+        local selected_package=$(cat "$temp_file" | eval "$fzf_cmd" | awk '{print $2}')
+        
+        if [ -z "$selected_package" ]; then
+            rm "$temp_file"
+            return
+        fi
+
         clear_screen
         echo "Package: $selected_package"
         echo "Description: $(pacman -Qi "$selected_package" | grep "Description" | cut -d":" -f2)"
@@ -256,42 +280,36 @@ sort_packages() {
         echo "Required By:"
         pacman -Qi "$selected_package" | grep "Required By" | cut -d":" -f2 | tr " " "\n" | sed "s/^/  /"
         echo
-        handle_return
-    else
-        clear_screen
-        dependencies_menu
-    fi
-    # Clean up
-    rm "$temp_file"
+        read -n 1 -s -r -p "Press any key to continue sorting or Ctrl+C to return to the Dependencies Menu"
+        rm "$temp_file"
+    done
 }
 
 # Sort Packages by Exclusive Direct Dependencies Count
 sort_packages_by_exclusive_deps() {
-    clear_screen
-    local temp_file=$(mktemp)
-    echo "Analyzing exclusive dependencies... This may take a while."
-    
-    # Get all packages and their exclusive dependency counts
-    pacman -Qq | while read -r pkg; do
-        # Get all direct dependencies
-        local all_deps=$(pactree -d 1 -u "$pkg" 2>/dev/null | tail -n +2)
-        # Get dependencies that would be removed with the package (exclusive dependencies)
-        local exclusive_deps=$(pacman -Rsp "$pkg" 2>/dev/null | grep -v "^$pkg")
-        # Count the number of exclusive dependencies
-        local exclusive_dep_count=$(echo "$exclusive_deps" | wc -l)
-        # Pad the dependency count to ensure proper numerical sorting
-        printf "%03d %s\n" "$exclusive_dep_count" "$pkg"
-    done | sort -rn > "$temp_file"
-    
-    echo # New line after progress dots
+    while true; do
+        clear_screen
+        local temp_file=$(mktemp)
+        echo "Analyzing exclusive dependencies... This may take a while."
+        
+        pacman -Qq | while read -r pkg; do
+            local exclusive_deps=$(pacman -Rsp "$pkg" 2>/dev/null | grep -v "^$pkg")
+            local exclusive_dep_count=$(echo "$exclusive_deps" | wc -l)
+            printf "%03d %s\n" "$exclusive_dep_count" "$pkg"
+        done | sort -rn > "$temp_file"
+        
+        echo # New line after progress dots
 
-    local fzf_cmd="fzf --reverse --preview 'echo \"Package: {2}\"; echo \"Exclusive Direct Dependencies: {1}\"; echo; echo \"Description: \$(pacman -Qi {2} | grep \"Description\" | cut -d\":\" -f2)\"; echo; echo \"All Direct Dependencies:\"; pactree -d 1 -u {2} 2>/dev/null | tail -n +2 | sed \"s/^/  /\"; echo; echo \"Optional Dependencies:\"; pacman -Qi {2} | grep -A 100 \"Optional Deps\" | sed -n \"/Optional Deps/,/^$/p\" | sed \"1d;$d\" | sed \"s/^/  /\"' --header 'Sorted by number of exclusive direct dependencies.
+        local fzf_cmd="fzf --reverse --preview 'echo \"Package: {2}\"; echo \"Exclusive Direct Dependencies: {1}\"; echo; echo \"Description: \$(pacman -Qi {2} | grep \"Description\" | cut -d\":\" -f2)\"; echo; echo \"All Direct Dependencies:\"; pactree -d 1 -u {2} 2>/dev/null | tail -n +2 | sed \"s/^/  /\"; echo; echo \"Optional Dependencies:\"; pacman -Qi {2} | grep -A 100 \"Optional Deps\" | sed -n \"/Optional Deps/,/^$/p\" | sed \"1d;$d\" | sed \"s/^/  /\"' --header 'Sorted by number of exclusive direct dependencies.
 (Ctrl+C to return)' --bind 'ctrl-c:abort'"
+        
+        local selected_package=$(cat "$temp_file" | eval "$fzf_cmd" | awk '{print $2}')
+        
+        if [ -z "$selected_package" ]; then
+            rm "$temp_file"
+            return
+        fi
 
-#echo \"Exclusive Direct Dependencies:\"; pacman -Rsp {2} 2>/dev/null | grep -v \"^{2}\" | sed \"s/^/  /\"; echo;
-    
-    local selected_package=$(cat "$temp_file" | eval "$fzf_cmd" | awk '{print $2}')
-    if [ -n "$selected_package" ]; then
         clear_screen
         echo "Package: $selected_package"
         echo "Description: $(pacman -Qi "$selected_package" | grep "Description" | cut -d":" -f2)"
@@ -301,27 +319,21 @@ sort_packages_by_exclusive_deps() {
         pactree -d 1 -u "$selected_package" 2>/dev/null | tail -n +2 | sed "s/^/  /"
         echo
         echo "Exclusive Direct Dependencies: $(pacman -Rsp "$selected_package" 2>/dev/null | grep -v "^$selected_package" | wc -l)"
-#        echo "Exclusive Direct Dependencies:"
-#        pacman -Rsp "$selected_package" 2>/dev/null | grep -v "^$selected_package" | sed "s/^/  /"
-#        echo
         echo "Optional Dependencies:"
         pacman -Qi "$selected_package" | grep -A 100 "Optional Deps" | sed -n "/Optional Deps/,/^$/p" | sed "1d;$d" | sed "s/^/  /"
         echo
         echo "Required By:"
         pacman -Qi "$selected_package" | grep "Required By" | cut -d":" -f2 | tr " " "\n" | sed "s/^/  /"
         echo
-        handle_return
-    else
-        clear_screen
-        dependencies_menu
-    fi
-    # Clean up
-    rm "$temp_file"
+        read -n 1 -s -r -p "Press any key to continue sorting or Ctrl+C to return to the Dependencies Menu"
+        rm "$temp_file"
+    done
 }
 
 # Dependencies Menu
 dependencies_menu() {
-    while true; do
+    local keep_in_submenu=true
+    while $keep_in_submenu; do
         clear_screen
         local options=("Explore Dependencies" "Sort by # of Dependencies" "Sort by # of Exclusive Dependencies" "Return to Main Menu")
         local selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse --header "
@@ -345,11 +357,8 @@ dependencies_menu() {
             "Sort by # of Exclusive Dependencies")
                 sort_packages_by_exclusive_deps
                 ;;
-            "Return to Main Menu")
-                return
-                ;;
-            *)
-                return
+            "Return to Main Menu"|"")
+                keep_in_submenu=false
                 ;;
         esac
     done
