@@ -72,8 +72,8 @@ SPM also supports command-line options for quick access to specific functions:
 - `-u *` or `update`: Update packages
 - `-i *` or `install`: Install packages
 - `-r *` or `remove`: Remove packages
-- `-o*` or `orphan`: Clean orphaned packages
-- `-h` or `--help`: Display help message
+- `-o*`  or `orphan`: Clean orphaned packages
+- `-h`   or `--help`: Display help message
 
 Example usage:
 
