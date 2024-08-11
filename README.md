@@ -31,7 +31,7 @@ SPM requires the following dependencies:
 - `fish`: For optional "source" integration in config.fish, see below.
 - `flatpak`: Possible?
 
-## Installation>
+## Installation
 
 1. Clone this repository ```git clone https://github.com/adelmonte/Simple_Package_Manager```
 2. Change directory ```cd Simple_Package_Manager```
