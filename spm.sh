@@ -74,9 +74,10 @@ show_help() {
 
 # Function to handle return to Main Menu
 handle_return() {
-    echo -e "\nPress Enter to return to the Main Menu or any other key to exit."
+    echo -e "\nPress Ctrl+C to return to the Main Menu or any other key to exit."
+    trap 'clear_screen; manager' INT
     read -n 1 -rs key
-    if [[ -z "$key" ]]; then
+    if [[ "$key" == $'\x03' ]]; then
         clear_screen
         manager
     else
@@ -115,11 +116,24 @@ install() {
             echo \"Package Info (not installed):\"
             yay -Si {1}
             echo
-            echo \"Files that would be installed:\"
-            yay -Fl {1} 2>/dev/null | awk '\''{print $2}'\'' || echo \"File list not available\"
+            if yay -Si {1} | grep -q \"^Repository *: aur$\"; then
+                echo \"PKGBUILD:\"
+                echo \"Loading PKGBUILD... Please wait.\"
+                yay -G {1} --noconfirm >/dev/null 2>&1
+                if [ -f {1}/PKGBUILD ]; then
+                    echo -e \"\\n--- PKGBUILD content ---\\n\"
+                    cat {1}/PKGBUILD
+                else
+                    echo \"PKGBUILD not available\"
+                fi
+                rm -rf {1} 2>/dev/null
+            else
+                echo \"Files that would be installed:\"
+                yay -Fl {1} 2>/dev/null | awk '\''{print $2}'\'' || echo \"File list not available\"
+            fi
         fi
     ' --preview-window=right:60%:wrap --header 'Select packages to install
-(TAB to select, ENTER to confirm, Ctrl+C to return)' --bind 'ctrl-c:abort'"
+(TAB to select, ENTER to confirm, Ctrl+C to return)' --bind 'ctrl-c:abort' --tiebreak=index --sort"
     
     # Get exact repository order from pacman.conf
     local repo_order=$(grep '^\[.*\]' /etc/pacman.conf | grep -v '^\[options\]' | sed 's/[][]//g')
@@ -143,13 +157,19 @@ install() {
     {
         repo = $1
         package = $2
-        priority = (repo in repo_priority) ? repo_priority[repo] : 999
-        if (package in is_installed) {
-            printf "0%03d %-50s %-20s [INSTALLED]\n", priority, package, repo
-        } else {
-            printf "1%03d %-50s %-20s\n", priority, package, repo
+        version = $3
+        if (version == "" || version == "unknown") {
+            version = "(unknown version)"
         }
-    }' | sort -n | cut -d' ' -f2-)
+        priority = (repo in repo_priority) ? repo_priority[repo] : (repo == "aur" ? 998 : 999)
+        installed_priority = (package in is_installed) ? 0 : 1
+        status = (package in is_installed) ? "[INSTALLED]" : ""
+        if (repo == "aur") {
+            printf "%01d %03d %-50s %-20s %s\n", installed_priority, priority, package, repo, status
+        } else {
+            printf "%01d %03d %-50s %-20s %s\n", installed_priority, priority, package " (" version ")", repo, status
+        }
+    }' | sort -n | cut -d' ' -f3-)
     
     # Use fzf to select packages, with initial query if provided
     local selected_packages
@@ -330,22 +350,33 @@ sort_packages_by_exclusive_deps() {
     done
 }
 
+# Dependencies Header
+print_dependencies_header() {
+    local packages=$(pacman -Q | wc -l)
+    local updates=$(cat /var/cache/update-cache.txt)
+    local pacman_cache=$(du -sh /var/cache/pacman/pkg/ 2>/dev/null | cut -f1)
+    local yay_cache=$(du -sh ~/.cache/yay/ 2>/dev/null | cut -f1)
+
+    echo "   _____  _____  __  __"
+    echo "  / ____||  __ \|  \/  |   Simple Package Manager"
+    echo " | (___  | |__) | \  / |   ----------------------"
+    echo "  \___ \ |  ___/| |\/| |   Pacman: $pacman_cache     Yay: $yay_cache"
+    echo "  ____) || |    | |  | |   Packages: $packages  Updates: $updates"
+    echo " |_____/ |_|    |_|  |_|     ~ Dependencies Menu ~"
+    echo
+}
+
 # Dependencies Menu
 dependencies_menu() {
-    local keep_in_submenu=true
-    while $keep_in_submenu; do
-        clear_screen
-        local options=("Explore Dependencies" "Sort by # of Dependencies" "Sort by # of Exclusive Dependencies" "Return to Main Menu")
-        local selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse --header "
-	      ================================
-              ~ SPM · Simple Package Manager ~
-	      ================================
-	           ~ Dependencies Menu ~
-=========================================================
-      Select a function to run (Ctrl+C to Return)
-=========================================================
+    while true; do
+        clear
+        print_dependencies_header
 
-" --bind 'ctrl-c:abort' --no-info)
+        local options=("Explore Dependencies" "Sort by # of Dependencies" "Sort by # of Exclusive Dependencies" "Return to Main Menu")
+        local header_height=8  # Adjust this based on the number of lines in your header
+        local menu_height=$(($(tput lines) - $header_height - 1))
+
+        local selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse --header "Select a function to run (Ctrl+C to Return)" --bind 'ctrl-c:abort' --no-info --height $menu_height --layout=reverse-list)
 
         case "$selected_option" in
             "Explore Dependencies")
@@ -358,11 +389,12 @@ dependencies_menu() {
                 sort_packages_by_exclusive_deps
                 ;;
             "Return to Main Menu"|"")
-                keep_in_submenu=false
+                return
                 ;;
         esac
     done
 }
+
 
 # Remove orphaned packages
 orphan() {
