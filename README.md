@@ -8,8 +8,7 @@ It provides an intuitive fzf interface for common package management tasks using
 
 ## Features
 
-- Interactive menu-driven interface
-- fzf Package installation and removal
+- Interactive fzf menu-driven interface
 - Dependency exploration and analysis
 - System update
 - Orphaned package cleanup
