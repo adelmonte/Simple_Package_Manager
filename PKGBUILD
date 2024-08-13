@@ -15,7 +15,7 @@ source=(
     "spm.fish"
     "spm_updates.sh"
 )
-sha256sums=('5af8640d1e2fb4b01d59bcd6ca64016399b56683f96aa9c183084b8f1dde02dc'
+sha256sums=('d11c6d48703871f3e8f0c39d5db5acf7aa9e2ee42e35a74c106abd1a8fd9f6bb'
             'fdeff443991cf36b8426794bb204f498762b004868df2e9d52b80b92964dfaa2'
             '738e1cbff9cb62526a560976fbb6eba494de0e43f2a946dbaa8aa65ec6123892'
             'dcc2b2f4ec8af1a0549af7031201eb9151711fc3b98807221e2422d8ae97ac05'
