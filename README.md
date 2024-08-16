@@ -20,6 +20,7 @@ It provides an intuitive fzf interface for common package management tasks using
 - (Optional) shell sources will hijack `install` command
 - Updates are auto-yes, no-confirm and include flatpak updates
 - Clean Package Cache will also auto select `y` for all options after starting
+- Removal is -Rnsc
 
 ## Prerequisites
 
