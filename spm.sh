@@ -6,12 +6,25 @@
 # Check if the script is being sourced
 (return 0 2>/dev/null) && sourced=1 || sourced=0
 
+# Define the update cache file path
+UPDATE_CACHE_FILE="$HOME/.cache/update-cache.txt"
+
 # Function to clear the screen and display the script name
 clear_screen() {
     clear
-    echo "SPM - Simple Package Manager"
-    echo "============================"
-    echo
+    local packages=$(pacman -Q | wc -l)
+    local updates=$(cat "$UPDATE_CACHE_FILE")
+    local pacman_cache=$(du -sh /var/cache/pacman/pkg/ 2>/dev/null | cut -f1)
+    local yay_cache=$(du -sh ~/.cache/yay/ 2>/dev/null | cut -f1)
+    local bold=$(tput bold)
+    local cyan=$(tput setaf 6)
+    local reset=$(tput sgr0)
+
+    echo " ___ ___ __  __"
+    echo "/ __| _ \\  \\/  | ${bold}${cyan}Simple Package Manager${reset}"
+    echo "\\__ \\  _/ |\\/| | ${bold}Pacman${reset}: $pacman_cache  ${bold}Yay${reset}: $yay_cache"
+    echo "|___/_| |_|  |_| ${bold}Packages${reset}: $packages  ${bold}Updates${reset}: $updates"
+    echo 
 }
 
 # Function to get cache sizes
@@ -23,23 +36,23 @@ get_cache_sizes() {
 
 # Function to get available updates
 get_available_updates() {
-    cat /var/cache/update-cache.txt
+    cat "$UPDATE_CACHE_FILE"
 }
 
-# Function to print the ASCII art header
 print_header() {
     local packages=$(pacman -Q | wc -l)
-    local updates=$(cat /var/cache/update-cache.txt)
+    local updates=$(cat "$UPDATE_CACHE_FILE")
     local pacman_cache=$(du -sh /var/cache/pacman/pkg/ 2>/dev/null | cut -f1)
     local yay_cache=$(du -sh ~/.cache/yay/ 2>/dev/null | cut -f1)
+    local bold=$(tput bold)
+    local cyan=$(tput setaf 6)
+    local reset=$(tput sgr0)
 
-    echo "   _____  _____  __  __"
-    echo "  / ____||  __ \|  \/  |   Simple Package Manager"
-    echo " | (___  | |__) | \  / |   ----------------------"
-    echo "  \___ \ |  ___/| |\/| |   Pacman: $pacman_cache     Yay: $yay_cache"
-    echo "  ____) || |    | |  | |   Packages: $packages  Updates: $updates"
-    echo " |_____/ |_|    |_|  |_|"
-    echo
+    echo " ___ ___ __  __"
+    echo "/ __| _ \\  \\/  | ${bold}${cyan}Simple Package Manager${reset}"
+    echo "\\__ \\  _/ |\\/| | ${bold}Pacman${reset}: $pacman_cache  ${bold}Yay${reset}: $yay_cache"
+    echo "|___/_| |_|  |_| ${bold}Packages${reset}: $packages  ${bold}Updates${reset}: $updates"
+    echo 
 }
 
 # Show help menu
@@ -64,24 +77,44 @@ show_help() {
     echo " $ spm -d        # Downgrade a package"
     echo " $ spm -c        # Clear package cache"
     echo
+    echo "If no option is provided, the interactive menu will be launched."
+    echo
+    echo
+    echo "Enable Optional Shell Sources for standalone arguments:"
+    echo
     echo "Note: The following commands can be used as standalone arguments:"
-    echo "  install        $ install fzf"
-    echo "  remove         $ remove fzf"
-    echo "  update         $ update"
-    echo "  orphan         $ orphan"
+    echo "   install       $ install fzf"
+    echo "   remove        $ remove fzf"
+    echo "   update        $ update"
+    echo "   orphan        $ orphan"
+    echo "   downgrade     $ downgrade"
+    echo
+    echo "1. For Bash users:"
+    echo "echo 'source /usr/bin/spm' >> ~/.bashrc"
+    echo
+    echo "2. For Fish users:"
+    echo "echo 'source /usr/share/fish/vendor_functions.d/spm.fish' >> ~/.config/fish/config.fish"
+    echo
+    echo
+    echo "Enable available update checking:"
+    echo
+    echo "mkdir -p ~/.config/systemd/user"
+    echo "cp /usr/share/spm/spm_updates.service ~/.config/systemd/user/"
+    echo "cp /usr/share/spm/spm_updates.timer ~/.config/systemd/user/"
+    echo "systemctl --user daemon-reload"
+    echo "systemctl --user enable --now spm_updates.timer"
     echo
 }
 
 # Function to handle return to Main Menu
 handle_return() {
-    echo -e "\nPress Ctrl+C to return to the Main Menu or any other key to exit."
-    trap 'clear_screen; manager' INT
+    echo -e "\nPress Ctrl+C to exit or any other key to return to the Main Menu."
     read -n 1 -rs key
     if [[ "$key" == $'\x03' ]]; then
+        exit 0
+    else
         clear_screen
         manager
-    else
-        exit 0
     fi
 }
 
@@ -93,17 +126,15 @@ update() {
     flatpak update --assumeyes
 
     # Reset the update cache if no updates are pending
-    if [ ! -s /var/cache/update-cache.txt ]; then
-        echo "0" > /var/cache/update-cache.txt
+    if [ ! -s "$UPDATE_CACHE_FILE" ]; then
+        echo "0" > "$UPDATE_CACHE_FILE"
     fi
     echo "Update complete and cache reset."
     handle_return
 }
 
-# Install Packages
 install() {
     clear_screen
-    echo "Loading packages... This may take a moment."
     local search_query="$1"
     local fzf_cmd="fzf --reverse --multi --preview '
         if pacman -Qi {1} &>/dev/null; then
@@ -133,13 +164,16 @@ install() {
             fi
         fi
     ' --preview-window=right:60%:wrap --header 'Select packages to install
-(TAB to select, ENTER to confirm, Ctrl+C to return)' --bind 'ctrl-c:abort' --tiebreak=index --sort"
+(TAB to select, ENTER to confirm, Ctrl+C to exit)' --bind 'ctrl-c:abort' --tiebreak=index --sort"
     
     # Get exact repository order from pacman.conf
     local repo_order=$(grep '^\[.*\]' /etc/pacman.conf | grep -v '^\[options\]' | sed 's/[][]//g')
     
+    # Update package databases
+    sudo pacman -Sy
+
     # Get list of all available packages and installed packages
-    local package_list=$(yay -Sl)
+    local package_list=$(yay -Sl --refresh)
     local installed_packages=$(pacman -Qq)
     
     # Sort package list based on repository order and installation status
@@ -188,8 +222,7 @@ install() {
             * ) yay -S $selected_packages;;
         esac
     fi
-    clear_screen
-    manager
+    handle_return
 }
 
 # Remove Package
@@ -203,7 +236,7 @@ remove() {
         echo \"Installed Files:\"
         pacman -Ql {1} | grep -v \"/$\" | cut -d\" \" -f2-
     ' --preview-window=right:60%:wrap --header 'Select packages to remove
-(TAB to select, ENTER to confirm, Ctrl+C to return)' --bind 'ctrl-c:abort'"
+(TAB to select, ENTER to confirm, Ctrl+C to exit)' --bind 'ctrl-c:abort'"
     
     # List all installed packages, including dependencies
     local package_list=$(pacman -Qq)
@@ -225,8 +258,7 @@ remove() {
             * ) yay -Rnsc $selected_packages;;
         esac
     fi
-    clear_screen
-    manager
+    handle_return
 }
 
 
@@ -353,18 +385,23 @@ sort_packages_by_exclusive_deps() {
 # Dependencies Header
 print_dependencies_header() {
     local packages=$(pacman -Q | wc -l)
-    local updates=$(cat /var/cache/update-cache.txt)
+    local updates=$(cat "$UPDATE_CACHE_FILE")
     local pacman_cache=$(du -sh /var/cache/pacman/pkg/ 2>/dev/null | cut -f1)
     local yay_cache=$(du -sh ~/.cache/yay/ 2>/dev/null | cut -f1)
+    local bold=$(tput bold)
+    local cyan=$(tput setaf 6)
+    local reset=$(tput sgr0)
 
-    echo "   _____  _____  __  __"
-    echo "  / ____||  __ \|  \/  |   Simple Package Manager"
-    echo " | (___  | |__) | \  / |   ----------------------"
-    echo "  \___ \ |  ___/| |\/| |   Pacman: $pacman_cache     Yay: $yay_cache"
-    echo "  ____) || |    | |  | |   Packages: $packages  Updates: $updates"
-    echo " |_____/ |_|    |_|  |_|     ~ Dependencies Menu ~"
+    echo " ___ ___ __  __"
+    echo "/ __| _ \\  \\/  | ${bold}${cyan}Simple Package Manager${reset} - Dependencies Sub-Menu"
+    echo "\\__ \\  _/ |\\/| | ${bold}Pacman${reset}: $pacman_cache  ${bold}Yay${reset}: $yay_cache"
+    echo "|___/_| |_|  |_| ${bold}Packages${reset}: $packages  ${bold}Updates${reset}: $updates"
     echo
 }
+
+
+
+
 
 # Dependencies Menu
 dependencies_menu() {
@@ -554,7 +591,7 @@ manager() {
         local header_height=8  # Adjust this based on the number of lines in your header
         local menu_height=$(($(tput lines) - $header_height - 1))
 
-        local selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse --header "Select a function to run (Ctrl+C to Return or Exit)" --bind 'ctrl-c:abort' --no-info --height $menu_height --layout=reverse-list)
+        local selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse --header "Select a function to run (Ctrl+C to Exit)" --bind 'ctrl-c:abort' --no-info --height $menu_height --layout=reverse-list)
 
         case "$selected_option" in
             "Update Packages")
@@ -578,12 +615,7 @@ manager() {
             "Clear Package Cache")
                 clear_cache
                 ;;
-            "Exit")
-                clear
-                echo "Exiting SPM - Simple Package Manager. Goodbye!"
-                exit 0
-                ;;
-            *)
+            "Exit"|"")
                 clear
                 echo "Exiting SPM - Simple Package Manager. Goodbye!"
                 exit 0
@@ -594,6 +626,9 @@ manager() {
 
 # Main execution
 if [ $sourced -eq 0 ]; then
+    # Create or initialize the update cache file if it doesn't exist
+    [ ! -f "$UPDATE_CACHE_FILE" ] && echo "0" > "$UPDATE_CACHE_FILE"
+
     if [ $# -eq 0 ]; then
         manager
     else
