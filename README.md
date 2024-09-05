@@ -18,7 +18,7 @@ It provides an intuitive fzf interface for common package management tasks using
   
 ## CAUTION!
 - (Optional) shell sources will hijack `install` command
-- Updates are auto-yes, no-confirm and include flatpak updates
+- Updates are auto-yes, no-confirm and include flatpak updates (user can edit script if they wish)
 - Clean Package Cache will also auto select `y` for all options after starting
 - Removal is -Rnsc
 
@@ -28,8 +28,6 @@ SPM requires the following dependencies:
 
 - `fzf`: For the interactive interface
 - `yay`: For AUR package management
-- `fish`: For optional "source" integration in config.fish, see below.
-- `flatpak`: Possible?
 
 ## Installation
 
@@ -37,7 +35,7 @@ SPM requires the following dependencies:
 2. Change directory ```cd Simple_Package_Manager```
 3. Install ```makepkg -si```
 
-After running the following commands, you can use SPM commands (install, remove, orphan) by typing (install *, remove *, orphan *) in your terminal."  
+Enable Optional Shell Sources for standalone arguments:"  
 
 - For Bash users:
 `echo 'source /usr/bin/spm' >> ~/.bashrc`
@@ -46,12 +44,17 @@ After running the following commands, you can use SPM commands (install, remove,
 `echo 'source /usr/share/fish/vendor_functions.d/spm.fish' >> ~/.config/fish/config.fish`
 
 To enable (optional) available update checking:  
-`sudo systemctl enable --now spm_updates.timer
-&& sudo systemctl enable --now spm_updates.service`  
+```
+mkdir -p ~/.config/systemd/user  
+cp /usr/share/spm/spm_updates.service ~/.config/systemd/user/  
+cp /usr/share/spm/spm_updates.timer ~/.config/systemd/user/  
+systemctl --user daemon-reload  
+systemctl --user enable --now spm_updates.timer  
+```
 
-The systemd timer is defaulted to run every 5 minutes and stores it's value in /var/cache/update-cache.txt  
+The systemd timer is defaulted to run every 5 minutes and stores it's value in `$HOME/.cache/update-cache.txt`
 
-The update service can be manually triggered from shell with `update-cache.sh `
+The update service can be manually triggered from shell with `spm_updates.sh`
 
 ## Usage
 
@@ -78,13 +81,20 @@ SPM also supports command-line options for quick access to specific functions:
 Example usage:
 
 ```
-spm -i adb    # Find adb package through fzf installer
-spm -r adb    # Remove adb package through fzf remover
-spm -u        # Updates entire system
+$ spm -i fzf	# Install packages
+$ spm -r fzf    # Remove package
+$ spm -u        # Updates entire system (alternative)
+$ spm -o        # Clean orphaned packages (alternative)
+$ spm -d        # Downgrade a package
+$ spm -c        # Clear package cache
 
-install adb   # Also finds adb package to install
-remove adb    # Also finds adb package to remove
-update        # Updates entire system
+OR with the optional shell sources from the instructions above:
+
+$ install fzf   # Also finds fzf package to install
+$ remove fzf    # Also finds fzf package to remove
+$ update        # Updates entire system
+$ orphan        # Clean orphaned packages
+$ downgrade     # Downgrade a package
 ```
 ## License
 
