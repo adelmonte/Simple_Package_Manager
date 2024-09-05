@@ -7,7 +7,7 @@
 (return 0 2>/dev/null) && sourced=1 || sourced=0
 
 # Define the update cache file path
-UPDATE_CACHE_FILE="$HOME/.cache/update-cache.txt"
+UPDATE_CACHE_FILE="/var/cache/spm/update-cache.txt"
 
 # Function to clear the screen and display the script name
 clear_screen() {
@@ -96,13 +96,8 @@ show_help() {
     echo "echo 'source /usr/share/fish/vendor_functions.d/spm.fish' >> ~/.config/fish/config.fish"
     echo
     echo
-    echo "Enable available update checking:"
-    echo
-    echo "mkdir -p ~/.config/systemd/user"
-    echo "cp /usr/share/spm/spm_updates.service ~/.config/systemd/user/"
-    echo "cp /usr/share/spm/spm_updates.timer ~/.config/systemd/user/"
-    echo "systemctl --user daemon-reload"
-    echo "systemctl --user enable --now spm_updates.timer"
+    echo "Enable available update checking (Required)"
+    echo "systemctl enable --now spm_updates.timer"
     echo
 }
 
@@ -133,8 +128,10 @@ update() {
     handle_return
 }
 
+# Install Packages
 install() {
     clear_screen
+    echo "Loading packages... This may take a moment."
     local search_query="$1"
     local fzf_cmd="fzf --reverse --multi --preview '
         if pacman -Qi {1} &>/dev/null; then
@@ -165,17 +162,14 @@ install() {
         fi
     ' --preview-window=right:60%:wrap --header 'Select packages to install
 (TAB to select, ENTER to confirm, Ctrl+C to exit)' --bind 'ctrl-c:abort' --tiebreak=index --sort"
-    
+
     # Get exact repository order from pacman.conf
     local repo_order=$(grep '^\[.*\]' /etc/pacman.conf | grep -v '^\[options\]' | sed 's/[][]//g')
-    
-    # Update package databases
-    sudo pacman -Sy
 
     # Get list of all available packages and installed packages
-    local package_list=$(yay -Sl --refresh)
+    local package_list=$(yay -Sl)
     local installed_packages=$(pacman -Qq)
-    
+
     # Sort package list based on repository order and installation status
     local sorted_package_list=$(echo "$package_list" | awk -v repo_order="$repo_order" -v installed="$installed_packages" '
     BEGIN {
@@ -204,7 +198,7 @@ install() {
             printf "%01d %03d %-50s %-20s %s\n", installed_priority, priority, package " (" version ")", repo, status
         }
     }' | sort -n | cut -d' ' -f3-)
-    
+
     # Use fzf to select packages, with initial query if provided
     local selected_packages
     if [ -n "$search_query" ]; then
@@ -212,7 +206,7 @@ install() {
     else
         selected_packages=$(echo "$sorted_package_list" | eval "$fzf_cmd" | awk '{print $1}')
     fi
-    
+
     if [ -n "$selected_packages" ]; then
         echo "The following packages will be installed:"
         echo "$selected_packages"
