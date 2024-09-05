@@ -8,18 +8,18 @@ It provides an intuitive fzf interface for common package management tasks using
 
 ## Features
 
-- Interactive fzf menu-driven interface
-- Dependency exploration and analysis
+- fzf menu-driven interface (with multi-select)
 - System update
 - Orphaned package cleanup
+- Dependency exploration and analysis
 - Package downgrading
 - Cache clearing
-- Package count, pacman and yay cache monitor, and optional "Available Updates" counter.
+- Package count, pacman and yay cache monitor, and available "Updates" counter.
   
 ## CAUTION!
 - (Optional) shell sources will hijack `install` command
 - Updates are auto-yes, no-confirm and include flatpak updates (user can edit script if they wish)
-- Clean Package Cache will also auto select `y` for all options after starting
+- Clean Package Cache will also auto select `y` for all options after confirmation
 - Removal is -Rnsc
 
 ## Prerequisites
@@ -35,7 +35,7 @@ SPM requires the following dependencies:
 2. Change directory ```cd Simple_Package_Manager```
 3. Install ```makepkg -si```
 
-Enable Optional Shell Sources for standalone arguments:"  
+Enable Optional Shell Sources for standalone arguments:  
 
 - For Bash users:
 `echo 'source /usr/bin/spm' >> ~/.bashrc`
@@ -43,18 +43,15 @@ Enable Optional Shell Sources for standalone arguments:"
 - For Fish users:
 `echo 'source /usr/share/fish/vendor_functions.d/spm.fish' >> ~/.config/fish/config.fish`
 
-To enable (optional) available update checking:  
+To enable (required) available update checking:  
 ```
-mkdir -p ~/.config/systemd/user  
-cp /usr/share/spm/spm_updates.service ~/.config/systemd/user/  
-cp /usr/share/spm/spm_updates.timer ~/.config/systemd/user/  
-systemctl --user daemon-reload  
 systemctl --user enable --now spm_updates.timer  
 ```
+Without the service, the install command will not sync package databases before install. See [Other](#other).  
 
-The systemd timer is defaulted to run every 5 minutes and stores it's value in `$HOME/.cache/update-cache.txt`
+The systemd timer is defaulted to run every 5 minutes and stores it's value in `/var/cache/spm/update-cache.txt`
 
-The update service can be manually triggered from shell with `spm_updates.sh`
+The update service can be manually triggered from shell with `spm_updates`
 
 ## Usage
 
@@ -96,6 +93,13 @@ $ update        # Updates entire system
 $ orphan        # Clean orphaned packages
 $ downgrade     # Downgrade a package
 ```
+## Other
+
+If you don't wish to use the update service (which is convientient since the install function doesn't require a sudo password to sync package database) see the file: `optional-install-function-no-update-service-pacman_-Sy`
+
+Generally speaking the functions (such as update including flatpak) and headers aren't difficult for a novice to edit to their liking.
+
+
 ## License
 
 This project is open source and available under the [GPL v3.0 License](LICENSE).
