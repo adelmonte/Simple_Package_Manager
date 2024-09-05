@@ -1,4 +1,3 @@
-# Maintainer: adelmonte <https://github.com/adelmonte>
 pkgname=spm
 pkgver=1.0.0
 pkgrel=1
@@ -15,20 +14,20 @@ source=(
     "spm.fish"
     "spm_updates.sh"
 )
-sha256sums=('d11c6d48703871f3e8f0c39d5db5acf7aa9e2ee42e35a74c106abd1a8fd9f6bb'
-            'fdeff443991cf36b8426794bb204f498762b004868df2e9d52b80b92964dfaa2'
-            '738e1cbff9cb62526a560976fbb6eba494de0e43f2a946dbaa8aa65ec6123892'
-            'dcc2b2f4ec8af1a0549af7031201eb9151711fc3b98807221e2422d8ae97ac05'
-            'ed4a96d6b9cb236b537794172cdb4672728ba88a3d8a0b481be64e169f024c28')
+sha256sums=('fc64c92ea9d4ce132969bdbde412633a098a595a31bec522a347cc9ff46fb109' 
+            'fc64c92ea9d4ce132969bdbde412633a098a595a31bec522a347cc9ff46fb109' 
+            'fc64c92ea9d4ce132969bdbde412633a098a595a31bec522a347cc9ff46fb109' 
+            'fc64c92ea9d4ce132969bdbde412633a098a595a31bec522a347cc9ff46fb109' 
+            'fc64c92ea9d4ce132969bdbde412633a098a595a31bec522a347cc9ff46fb109')
 install=spm.install
 
 package() {
     # Install main script
     install -Dm755 "$srcdir/spm.sh" "$pkgdir/usr/bin/spm"
     
-    # Install systemd service and timer
-    install -Dm644 "$srcdir/spm_updates.timer" "$pkgdir/usr/lib/systemd/system/spm_updates.timer"
-    install -Dm644 "$srcdir/spm_updates.service" "$pkgdir/usr/lib/systemd/system/spm_updates.service"
+    # Install systemd service and timer to package directory
+    install -Dm644 "$srcdir/spm_updates.timer" "$pkgdir/usr/share/spm/spm_updates.timer"
+    install -Dm644 "$srcdir/spm_updates.service" "$pkgdir/usr/share/spm/spm_updates.service"
     
     # Install Fish wrapper
     install -Dm755 "$srcdir/spm.fish" "$pkgdir/usr/share/fish/vendor_functions.d/spm.fish"
