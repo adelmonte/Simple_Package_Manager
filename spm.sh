@@ -96,7 +96,7 @@ show_help() {
     echo "echo 'source /usr/share/fish/vendor_functions.d/spm.fish' >> ~/.config/fish/config.fish"
     echo
     echo
-    echo "Enable available update checking (Required)"
+    echo "To enable (Required) available update checking:"
     echo "systemctl enable --now spm_updates.timer"
     echo
 }
