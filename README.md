@@ -16,7 +16,7 @@ It provides an intuitive fzf interface for common package management tasks using
 - Cache clearing
 - Package count, pacman and yay cache monitor, and available "Updates" counter.
   
-## CAUTION!
+## CAUTION!028592
 - (Optional) shell sources will hijack `install` command
 - Updates are auto-yes, no-confirm and include flatpak updates (user can edit script if they wish)
 - Clean Package Cache will also auto select `y` for all options after confirmation
@@ -45,7 +45,7 @@ Enable Optional Shell Sources for standalone arguments:
 
 To enable (required) available update checking:  
 ```
-systemctl --user enable --now spm_updates.timer  
+systemctl enable --now spm_updates.timer  
 ```
 Without the service, the install command will not sync package databases before install. See [Other](#other).  
 
