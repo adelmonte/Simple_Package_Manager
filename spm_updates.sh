@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CACHE_FILE="/var/cache/update-cache.txt"
+CACHE_FILE="$HOME/.cache/update-cache.txt"
 
 # Function to check if running as root
 is_root() {
@@ -40,4 +40,4 @@ echo "Updates found: $yay_updates"
 echo "Cache file content: $(cat "$CACHE_FILE")"
 
 # Exit with the appropriate status
-exit $yay_updates
+exit 0
