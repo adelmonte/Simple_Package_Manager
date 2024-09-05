@@ -11,12 +11,8 @@ post_install() {
     echo "echo 'source /usr/share/fish/vendor_functions.d/spm.fish' >> ~/.config/fish/config.fish"
     echo
     echo
-    echo "To enable (optional) available update checking:"
+    echo "To enable (Required) available update checking:"
     echo
-    echo "mkdir -p ~/.config/systemd/user"
-    echo "cp /usr/share/spm/spm_updates.service ~/.config/systemd/user/"
-    echo "cp /usr/share/spm/spm_updates.timer ~/.config/systemd/user/"
-    echo "systemctl --user daemon-reload"
-    echo "systemctl --user enable --now spm_updates.timer"
+    echo "systemctl enable --now spm_updates.timer"
     echo
 }
