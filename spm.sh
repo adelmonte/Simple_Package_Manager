@@ -39,6 +39,7 @@ get_available_updates() {
     cat "$UPDATE_CACHE_FILE"
 }
 
+# Function to print the header
 print_header() {
     local packages=$(pacman -Q | wc -l)
     local updates=$(cat "$UPDATE_CACHE_FILE")
@@ -116,15 +117,51 @@ handle_return() {
 # Update Packages
 update() {
     clear_screen
-    echo "Updating packages..."
-    yes | yay
-    flatpak update --assumeyes
+    echo "Package Update Options"
+    echo "----------------------"
+    
+    while true; do
+        echo "1) Quick Update (Auto-yes for yay and Flatpak) [Default]"
+        echo "2) yay Update (Review changes)"
+        echo "3) Flatpak Update (Review changes)"
+        echo "4) Full Update (Review all changes)"
+        echo "5) Return to Main Menu"
+        echo
+        read -p "Enter option (1-5) [1]: " update_option
 
-    # Reset the update cache if no updates are pending
-    if [ ! -s "$UPDATE_CACHE_FILE" ]; then
-        echo "0" > "$UPDATE_CACHE_FILE"
-    fi
-    echo "Update complete and cache reset."
+        case $update_option in
+            1|"")
+                echo "Performing quick update..."
+                yes | yay
+                flatpak update --assumeyes
+                break
+                ;;
+            2)
+                echo "Updating yay packages..."
+                yay
+                break
+                ;;
+            3)
+                echo "Updating Flatpak apps..."
+                flatpak update
+                break
+                ;;
+            4)
+                echo "Performing full update..."
+                yay
+                flatpak update
+                break
+                ;;
+            5)
+                return
+                ;;
+            *)
+                echo "Invalid option. Please try again."
+                ;;
+        esac
+    done
+
+    echo "Update complete."
     handle_return
 }
 
@@ -240,21 +277,51 @@ remove() {
     if [ -n "$search_query" ]; then
         selected_packages=$(echo "$package_list" | eval "$fzf_cmd -q \"$search_query\"")
     else
-        selected_packages=$(echo "$package_list" | eval "$fzf_cmd")
+        selected_packages=$(echo -e "$package_list\n6) Return to Main Menu" | eval "$fzf_cmd")
     fi
     
-    if [ -n "$selected_packages" ]; then
+    if [ "$selected_packages" = "6)" ]; then
+        return
+    elif [ -n "$selected_packages" ]; then
         echo "The following packages will be removed:"
         echo "$selected_packages"
-        read -p "Do you want to proceed? [Y/n] " confirm
+        echo
+        
+        echo "Package Removal Options"
+        echo "------------------------"
+        
+        local pacman_args
+        while true; do
+            echo "1) Remove package, dependencies, config files, and dependencies of other packages (-Rnsc) [Default]"
+            echo "2) Remove package, dependencies, and configuration files (-Rns)"
+            echo "3) Remove package and configuration files (-Rn)"
+            echo "4) Remove package and its dependencies (-Rs)"
+            echo "5) Remove package only (-R)"
+            echo "6) Return to Main Menu"
+            echo
+            read -p "Enter option (1-6) [1]: " remove_option
+
+            case $remove_option in
+                1|"") pacman_args="-Rnsc"; break;;
+                2) pacman_args="-Rns"; break;;
+                3) pacman_args="-Rn"; break;;
+                4) pacman_args="-Rs"; break;;
+                5) pacman_args="-R"; break;;
+                6) return;;
+                *) echo "Invalid option. Please try again.";;
+            esac
+        done
+
+        read -p "Proceed with removal using $pacman_args? [Y/n] " confirm
         case $confirm in
             [Nn]* ) echo "Operation cancelled.";;
-            * ) yay -Rnsc $selected_packages;;
+            * ) yay $pacman_args $selected_packages;;
         esac
     fi
+
+    echo "Removal process completed."
     handle_return
 }
-
 
 # Explore Dependencies
 explore_dependencies() {
@@ -441,34 +508,82 @@ orphan() {
         return
     fi
 
-    if [ -n "$orphans" ]; then
-        echo "The following orphaned packages were found:"
-        echo "$orphans"
-        echo
-        read -p "Do you want to remove these orphaned packages? [Y/n] " confirm
-        if [[ ! $confirm =~ ^[Nn](o)?$ ]]; then
-            sudo pacman -Rns $orphans
-        else
-            echo "No orphaned packages were removed."
-        fi
-    else
-        echo "No orphaned packages found."
-    fi
-
+    echo "Options:"
+    echo "1) Quick remove all orphaned and unneeded packages (auto-yes) [Default]"
+    echo "2) Remove orphaned packages (no longer required by any installed package)"
+    echo "3) Remove unneeded packages (installed as dependencies but no longer required)"
+    echo "4) Review and remove both orphaned and unneeded packages"
+    echo "5) Return to Main Menu"
     echo
-    if [ "$unneeded" != "there is nothing to do" ]; then
-        echo "The following additional unneeded packages were found:"
-        echo "$unneeded"
-        echo
-        read -p "Do you want to remove these unneeded packages? [N/y] " confirm
-        if [[ $confirm =~ ^[Yy](es)?$ ]]; then
-            sudo pacman -Rsu $(pacman -Qqd)
-        else
-            echo "No unneeded packages were removed."
-        fi
-    else
-        echo "No additional unneeded packages found."
-    fi
+    read -p "Enter option (1-5) [1]: " option
+
+    case ${option:-1} in
+        1)
+            echo "Removing all orphaned and unneeded packages..."
+            if [ -n "$orphans" ]; then
+                sudo pacman -Rns $orphans --noconfirm
+            fi
+            if [ "$unneeded" != "there is nothing to do" ]; then
+                sudo pacman -Rsu $(pacman -Qqd) --noconfirm
+            fi
+            echo "Removal complete."
+            ;;
+        2)
+            if [ -n "$orphans" ]; then
+                echo "The following orphaned packages will be removed:"
+                echo "$orphans"
+                echo
+                read -p "Do you want to proceed? [Y/n] " confirm
+                if [[ ! $confirm =~ ^[Nn](o)?$ ]]; then
+                    sudo pacman -Rns $orphans
+                else
+                    echo "No orphaned packages were removed."
+                fi
+            else
+                echo "No orphaned packages found."
+            fi
+            ;;
+        3)
+            if [ "$unneeded" != "there is nothing to do" ]; then
+                echo "The following unneeded packages will be removed:"
+                echo "$unneeded"
+                echo
+                read -p "Do you want to proceed? [Y/n] " confirm
+                if [[ ! $confirm =~ ^[Nn](o)?$ ]]; then
+                    sudo pacman -Rsu $(pacman -Qqd)
+                else
+                    echo "No unneeded packages were removed."
+                fi
+            else
+                echo "No unneeded packages found."
+            fi
+            ;;
+        4)
+            if [ -n "$orphans" ] || [ "$unneeded" != "there is nothing to do" ]; then
+                echo "The following packages will be removed:"
+                [ -n "$orphans" ] && echo "Orphaned packages:
+$orphans"
+                [ "$unneeded" != "there is nothing to do" ] && echo "Unneeded packages:
+$unneeded"
+                echo
+                read -p "Do you want to proceed? [Y/n] " confirm
+                if [[ ! $confirm =~ ^[Nn](o)?$ ]]; then
+                    [ -n "$orphans" ] && sudo pacman -Rns $orphans
+                    [ "$unneeded" != "there is nothing to do" ] && sudo pacman -Rsu $(pacman -Qqd)
+                else
+                    echo "No packages were removed."
+                fi
+            else
+                echo "No orphaned or unneeded packages found."
+            fi
+            ;;
+        5)
+            return
+            ;;
+        *)
+            echo "Invalid option. No packages were removed."
+            ;;
+    esac
 
     handle_return
 }
@@ -550,42 +665,91 @@ downgrade() {
 # Clear Package Cache
 clear_cache() {
     clear_screen
-    echo "Clearing Package Cache"
-    echo "----------------------"
-    echo "This will clear both yay and pacman caches."
-    echo
+    echo "Clear Package Cache Options"
+    echo "---------------------------"
+    
+    while true; do
+        echo "1) Quick Clear (Auto-yes for all prompts) [Default]"
+        echo "2) Interactive Clear (Manual confirmation for each step)"
+        echo "3) Return to Main Menu"
+        echo
+        read -p "Enter option (1-3) [1]: " clear_option
 
-    read -p "Do you want to proceed? [Y/n] " confirm
-    case $confirm in
-        [Nn]* ) 
-            echo "Operation cancelled."
-            ;;
-        * ) 
-            echo "Clearing pacman cache..."
-            sudo pacman -Scc --noconfirm
-            echo "Clearing yay cache..."
-            yay -Scc --noconfirm
-            echo "Cache cleared successfully
-."
-            ;;
-    esac
+        case $clear_option in
+            1|"")
+                echo "Performing quick cache clear..."
+                echo "Clearing package caches..."
+                yes | sudo pacman -Scc
+                yes | yay -Scc
+                break
+                ;;
+            2)
+                echo "Performing interactive cache clear..."
+                echo "Clearing pacman cache..."
+                sudo pacman -Scc
+                echo "Clearing yay cache..."
+                yay -Scc
+                break
+                ;;
+            3)
+                return
+                ;;
+            *)
+                echo "Invalid option. Please try again."
+                ;;
+        esac
+    done
 
+    echo "Cache clearing complete."
+    
     # Recalculate cache sizes after cleaning
     get_cache_sizes
 
     handle_return
 }
 
+# Function to get recently installed packages
+get_recent_installs() {
+    local count=${1:-10}  # Default to showing 10 recent installs
+    tac /var/log/pacman.log | grep "installed" | head -n "$count" | awk '{print $4}' | sed 's/[()]//g'
+}
+
+# Function to get recently removed packages
+get_recent_removals() {
+    local count=${1:-10}  # Default to showing 10 recent removals
+    tac /var/log/pacman.log | grep "removed" | head -n "$count" | awk '{print $4}' | sed 's/[()]//g'
+}
+
+# Export the functions so they're available to subshells
+export -f get_recent_installs
+export -f get_recent_removals
+
+# Complete manager function
 manager() {
     while true; do
         clear
         print_header
 
         local options=("Install Packages" "Remove Packages" "Update Packages" "Clean Orphans" "Dependencies" "Downgrade Package" "Clear Package Cache" "Exit")
-        local header_height=8  # Adjust this based on the number of lines in your header
+        local header_height=8
         local menu_height=$(($(tput lines) - $header_height - 1))
 
-        local selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse --header "Select a function to run (Ctrl+C to Exit)" --bind 'ctrl-c:abort' --no-info --height $menu_height --layout=reverse-list)
+        local selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse \
+            --preview '
+                bold=$(tput bold)
+                normal=$(tput sgr0)
+                echo "${bold}Recently installed packages:${normal}"
+                bash -c get_recent_installs 10
+                echo
+                echo "${bold}Recently removed packages:${normal}"
+                bash -c get_recent_removals 10
+            ' \
+            --preview-window=right:50%:wrap \
+            --header "Press Enter to select a function to run (Ctrl+C to Exit)" \
+            --bind 'ctrl-c:abort' \
+            --no-info \
+            --height $menu_height \
+            --layout=reverse-list)
 
         case "$selected_option" in
             "Update Packages")
