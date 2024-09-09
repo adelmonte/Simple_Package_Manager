@@ -8,19 +8,45 @@ It provides an intuitive fzf interface for common package management tasks using
 
 ## Features
 
-- fzf menu-driven interface (with multi-select)
-- System update
-- Orphaned package cleanup
-- Dependency exploration and analysis
-- Package downgrading
-- Cache clearing
-- Package count, pacman and yay cache monitor, and available "Updates" counter.
+### User-Friendly Interface
+- Interactive menu-driven interface powered by `fzf`
+- Multi-Select functionality for batch operations
+- Real-time package information preview
+- Recently installed and removed packages display
+
+### System Management
+- Comprehensive system update options
+  - Quick update (auto-yes for yay and Flatpak)
+  - Separate yay and Flatpak update options
+  - Full update with review of all changes
+- Intelligent package installation
+  -Multi-Select
+  - Search and install from official repositories and AUR
+  - Display of package details, dependencies, files to install, and PKGBUILD (for AUR packages)
+- Flexible package removal
+  - Multi-Select
+  - Multiple removal options (including dependencies and config files)
+  - Preview of package info and installed files before removal
+
+### Dependency Management
+- Orphaned package cleanup with various options
+- Advanced dependency exploration and analysis
+  - Interactive exploration of package dependencies
+  - Sorting packages by number of dependencies
+  - Sorting packages by number of exclusive dependencies
+
+### System Maintenance
+- Package downgrading functionality
+  - Search and downgrade from local cache
+  - Option to search and download from Arch Linux Archive (ALA)
+- Cache clearing with quick and interactive options
+- Monitoring of system status
+  - Display of total installed packages
+  - Real-time tracking of Pacman and Yay cache sizes
+  - Available updates counter
   
 ## CAUTION!
 - (Optional) shell sources will hijack `install` command
-- Updates are auto-yes, no-confirm and include flatpak updates (user can edit script if they wish)
-- Clean Package Cache will also auto select `y` for all options after confirmation
-- Removal is -Rnsc
 
 ## Prerequisites
 
@@ -47,7 +73,7 @@ To enable (required) available update checking:
 ```
 systemctl enable --now spm_updates.timer  
 ```
-Without the service, the install command will not sync package databases before install. See [Other](#other).  
+Without the service, the install command does not sync package databases before install, which could cause issues. See [Other](#other).  
 
 The systemd timer is defaulted to run every 5 minutes and stores it's value in `/var/cache/spm/update-cache.txt`
 
@@ -95,10 +121,7 @@ $ downgrade     # Downgrade a package
 ```
 ## Other
 
-If you don't wish to use the update service (which is convientient since the install function doesn't require a sudo password to sync package database) see the file: `optional-install-function-no-update-service-pacman_-Sy`
-
-Generally speaking the functions (such as update including flatpak) and headers aren't difficult for a novice to edit to their liking.
-
+If you don't wish to use the update service (which is convientient since the install function doesn't require a sudo password to sync package database) replace the spm.sh install function. See the file: `optional-install-function-no-update-service-pacman_-Sy`
 
 ## License
 
