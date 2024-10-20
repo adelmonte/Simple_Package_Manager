@@ -12,7 +12,7 @@ It provides an intuitive fzf interface for common package management tasks using
 - Interactive menu-driven interface powered by `fzf`
 - Multi-Select functionality for batch operations
 - Real-time package information preview
-- Recently installed and removed packages display
+- Recently installed and removed packages & pacman.conf previews
 
 ### System Management
 - Comprehensive system update options
