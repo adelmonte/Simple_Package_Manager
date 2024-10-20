@@ -224,7 +224,7 @@ update() {
     done
 
     # Call spm_updates.sh before completion to update cache in main menu
-    /usr/bin/spm_updates
+    sudo /usr/bin/spm_updates
 
     echo "Update complete."
     if [ -t 0 ]; then
@@ -1514,6 +1514,11 @@ manager() {
         esac
     done
 }
+
+# Export functions if the script is being sourced
+if [ $sourced -eq 1 ]; then
+    export -f update install remove orphan downgrade clear_cache show_help manager dependencies_menu pacman_config_menu
+fi
 
 # Main execution
 if [ $sourced -eq 0 ]; then
