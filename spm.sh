@@ -223,12 +223,14 @@ update() {
         esac
     done
 
-    # Call spm_updates.sh before completion to update cache in main menu
-    sudo /usr/bin/spm_updates
-
-    echo "Update complete."
-    if [ -t 0 ]; then
-        handle_return
+    # Call spm_updates to update cache in main menu
+    if [ "$(id -u)" -eq 0 ]; then
+        # If running as root, directly call spm_updates
+        /usr/bin/spm_updates
+    else
+        # If not root, start the user timer
+        systemctl start --user spm_updates.timer
+        echo "Update check scheduled. Cache will be updated shortly."
     fi
 }
 
