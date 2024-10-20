@@ -119,9 +119,6 @@ $ update        # Updates entire system
 $ orphan        # Clean orphaned packages
 $ downgrade     # Downgrade a package
 ```
-## Other
-
-If you don't wish to use the update service (which is convientient since the install function doesn't require a sudo password to sync package database) replace the spm.sh install function. See the file: `optional-install-function-no-update-service-pacman_-Sy`
 
 ## License
 
