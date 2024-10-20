@@ -17,7 +17,6 @@ It provides an intuitive fzf interface for common package management tasks using
 ### System Management
 - Comprehensive system update options
   - Quick update (auto-yes for yay and Flatpak)
-  - Separate yay and Flatpak update options
   - Full update with review of all changes
 - Intelligent package installation
   -Multi-Select
@@ -56,11 +55,9 @@ SPM requires the following dependencies:
 - `yay`: For AUR package management
 
 ## Installation
-
-1. Clone this repository ```git clone https://github.com/adelmonte/Simple_Package_Manager```
-2. Change directory ```cd Simple_Package_Manager```
-3. Install ```makepkg -si```
-
+```
+yay spm-arch
+```
 Enable Optional Shell Sources for standalone arguments:  
 
 - For Bash users:
@@ -73,7 +70,7 @@ To enable (required) available update checking:
 ```
 systemctl enable --now spm_updates.timer  
 ```
-Without the service, the install command does not sync package databases before install, which could cause issues. See [Other](#other).  
+Without the service, the install command does not sync package databases before install, which could cause issues.
 
 The systemd timer is defaulted to run every 5 minutes and stores it's value in `/var/cache/spm/update-cache.txt`
 
