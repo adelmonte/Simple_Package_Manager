@@ -2,7 +2,7 @@
 
 ![Description of the GIF](spm.gif)
 
-SPM is a Simple Package Manager for Arch-based Linux distributions.  
+SPM is a Simple FZF Package Manager for Arch-based Linux distributions.  
 
 It provides an intuitive fzf interface for common package management tasks using `yay` and `pacman`.
 
