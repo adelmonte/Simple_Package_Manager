@@ -44,7 +44,7 @@ It provides an intuitive fzf interface for common package management tasks using
   - Real-time tracking of Pacman and Yay cache sizes
   - Available updates counter
   
-## CAUTION!
+## Warning
 - (Optional) shell sources will hijack `install` command
 
 ## Prerequisites
