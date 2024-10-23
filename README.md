@@ -70,7 +70,7 @@ To enable (required) available update checking:
 ```
 systemctl enable --now spm_updates.timer  
 ```
-Without the service, the install command does not sync package databases before install, which could cause issues. If the function did not work this way, it would require entering sudo password every time to check if updates are available.
+Without the service, the install command does not sync package databases before install, which could cause issues. If the function did not work this way, it would require entering sudo password every time to access the install fzf function and also to check if updates are available.
 
 The systemd timer is defaulted to run every 5 minutes and stores it's value in `/var/cache/spm/update-cache.txt`
 
