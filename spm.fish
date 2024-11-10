@@ -18,24 +18,12 @@ function remove
     $bash_path -c "source $bash_script_path && remove $argv"
 end
 
-function dependencies
-    $bash_path -c "source $bash_script_path && dependencies $argv"
-end
-
-function sort_packages
-    $bash_path -c "source $bash_script_path && sort_packages $argv"
-end
-
 function orphan
     $bash_path -c "source $bash_script_path && orphan"
 end
 
 function downgrade
     $bash_path -c "source $bash_script_path && downgrade $argv"
-end
-
-function show_help
-    $bash_path -c "source $bash_script_path && show_help"
 end
 
 # Main function to handle command-line arguments
