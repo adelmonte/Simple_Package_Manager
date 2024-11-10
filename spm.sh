@@ -155,6 +155,7 @@ update() {
         "Full Update (Review changes for yay and Flatpak)"
         "yay Update (Review changes)"
         "Flatpak Update (Review changes)"
+        "AUR Development Packages Update (git)"
         "Return to Main Menu"
     )
 
@@ -209,7 +210,7 @@ update() {
                 ;;
             "yay Update"*)
                 echo "Updating yay packages..."
-                yay
+                yay -Syu
                 break
                 ;;
             "Flatpak Update"*)
@@ -217,21 +218,16 @@ update() {
                 flatpak update
                 break
                 ;;
+            "AUR Development Packages Update (git)")
+                echo "Checking AUR development packages for updates..."
+                yay -Sua --devel
+                break
+                ;;
             "Return to Main Menu")
                 return
                 ;;
         esac
     done
-
-    # Call spm_updates to update cache in main menu
-    if [ "$(id -u)" -eq 0 ]; then
-        # If running as root, directly call spm_updates
-        /usr/bin/spm_updates
-    else
-        # If not root, start the user timer
-        systemctl start --user spm_updates.timer
-        echo "Update check scheduled. Cache will be updated shortly."
-    fi
 }
 
 # Install Packages
@@ -972,14 +968,16 @@ clear_cache() {
 
         local options=(
             "Quick Clear (Auto-yes for all prompts)"
-            "Clear Pacman Cache"
+            "Clear Pacman Cache (Keep Latest Version)"
+            "Clear ALL Pacman Cache (Including Latest)"
+            "Clear Uninstalled Packages Only"
             "Clear Yay Cache"
             "Clear Both Caches"
             "Return to Main Menu"
         )
 
         # Calculate menu height
-        local header_height=7  # Adjust this based on the number of lines in your header
+        local header_height=7
         local menu_height=$(($(tput lines) - $header_height - 1))
 
         preview_width=$(cat "$preview_file")
@@ -990,6 +988,11 @@ clear_cache() {
                 echo "${bold}Current Cache Sizes:${normal}"
                 echo "Pacman cache: $(du -sh /var/cache/pacman/pkg | cut -f1)"
                 echo "Yay cache: $(du -sh ~/.cache/yay 2>/dev/null | cut -f1)"
+                echo
+                echo "${bold}Pacman Cache Details:${normal}"
+                echo "Total packages: $(ls -1 /var/cache/pacman/pkg/*.pkg.tar.* 2>/dev/null | wc -l)"
+                echo "Unique packages: $(ls -1 /var/cache/pacman/pkg/*.pkg.tar.* 2>/dev/null | sed '\''s/-[0-9].*$//'\'' | sort -u | wc -l)"
+                echo "Old versions: $(ls -1 /var/cache/pacman/pkg/*.pkg.tar.* 2>/dev/null | wc -l)"
                 echo
                 echo "${bold}Total Disk Usage:${normal}"
                 df -h / | awk "NR==2 {print \$3 \" used out of \" \$2 \" (\" \$5 \" used)\"}"
@@ -1022,13 +1025,24 @@ clear_cache() {
             "Quick Clear (Auto-yes for all prompts)")
                 echo "Performing quick cache clear..."
                 echo "Clearing Pacman cache..."
-                sudo pacman -Scc --noconfirm
+                # Remove all versions except the latest
+                sudo paccache -rk1 --noconfirm
+                # Remove all uninstalled package cache
+                sudo paccache -ruk0 --noconfirm
                 echo "Clearing Yay cache..."
                 yay -Scc --noconfirm
                 ;;
-            "Clear Pacman Cache")
-                echo "Clearing Pacman cache..."
-                sudo pacman -Scc
+            "Clear Pacman Cache (Keep Latest Version)")
+                echo "Clearing Pacman cache but keeping latest version..."
+                sudo paccache -rv
+                ;;
+            "Clear ALL Pacman Cache (Including Latest)")
+                echo "Clearing ALL Pacman cache..."
+                sudo rm -f /var/cache/pacman/pkg/*.pkg.tar.*
+                ;;
+            "Clear Uninstalled Packages Only")
+                echo "Clearing cache of uninstalled packages..."
+                sudo paccache -ruk0
                 ;;
             "Clear Yay Cache")
                 echo "Clearing Yay cache..."
@@ -1036,7 +1050,8 @@ clear_cache() {
                 ;;
             "Clear Both Caches")
                 echo "Clearing Pacman cache..."
-                sudo pacman -Scc
+                sudo paccache -rv
+                sudo paccache -ruk0
                 echo "Clearing Yay cache..."
                 yay -Scc
                 ;;
@@ -1045,7 +1060,9 @@ clear_cache() {
                 ;;
         esac
 
-        echo "Cache clearing operation completed."
+        # Verify cache clearing
+        local remaining_cache=$(du -sh /var/cache/pacman/pkg | cut -f1)
+        echo "Operation completed. Remaining pacman cache size: $remaining_cache"
         read -n 1 -s -r -p "Press any key to continue..."
     done
 }
@@ -1426,7 +1443,7 @@ export -f display_preview
 export -f get_option_description
 export -f display_pacman_conf
 export -f edit_pacman_option
-export -f toggle_pacman_option
+#export -f toggle_pacman_option
 export -f toggle_repository
 export -f manage_repositories
 export -f add_repository
