@@ -134,10 +134,8 @@ update() {
         local resize_flag="/tmp/spm_resize_flag"
         local detailed_cache_file="/var/cache/spm/detailed-update-cache.txt"
         local menu_height
-
         # Initialize resize flag
         echo 0 > "$resize_flag"
-
         # Set menu height based on terminal size
         if [ -n "$LINES" ]; then
             menu_height=$((LINES - 10))
@@ -149,42 +147,41 @@ update() {
         local preview_width=50
         local menu_height=15
     fi
-
-    local options=(
-        "Quick Full Update (Auto-yes for yay and Flatpak)"
-        "Full Update (Review changes for yay and Flatpak)"
-        "yay Update (Review changes)"
-        "Flatpak Update (Review changes)"
-        "AUR Development Packages Update (git)"
-        "Return to Main Menu"
-    )
-
-    while true; do
-        if [ -t 0 ]; then
-            preview_width=$(cat "$preview_file")
-            local selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse \
-                --preview '
-                    bold=$(tput bold)
-                    normal=$(tput sgr0)
-                    echo "${bold}Upgradable Packages:${normal}"
-                    echo
-                    cat "'$detailed_cache_file'" 2>/dev/null || echo "No update information available."
-                ' \
-                --preview-window="right:${preview_width}%:wrap" \
-                --preview-label='Available Updates' \
-                --no-info \
-                --height $menu_height \
-                --layout=reverse-list \
-                --header "Select an update option. Alt-[ move preview left, Alt-] move preview right.
+    
+    local selected_option=$(printf '%s\n' \
+        "Quick Full Update (Auto-yes all)" \
+        "Full Update (Review all changes)" \
+        "yay System Update (Review changes)" \
+        "Flatpak Update (Review changes)" \
+        "Update AUR Development Packages (-git)" \
+        "Return to Main Menu" | 
+        fzf --reverse \
+            --preview '
+                echo -e "\033[1mCommand to execute:\033[0m"
+                case {} in
+                    "Quick Full Update (Auto-yes all)")        echo "yes | yay && flatpak update --assumeyes" ;;
+                    "Full Update (Review all changes)")        echo "yay && flatpak update" ;;
+                    "yay System Update (Review changes)")      echo "yay -Syu" ;;
+                    "Flatpak Update (Review changes)")         echo "flatpak update" ;;
+                    "Update AUR Development Packages (-git)")         echo "yay -Sua --devel" ;;
+                    *)                                         echo "No command to execute" ;;
+                esac
+                echo
+                echo -e "\033[1mUpgradable Packages:\033[0m"
+                echo
+                cat "'$detailed_cache_file'" 2>/dev/null || echo "No update information available."
+            ' \
+            --preview-window="right:${preview_width}%:wrap" \
+            --preview-label='Update Information' \
+            --no-info \
+            --height $menu_height \
+            --layout=reverse-list \
+            --header "Select an update option. Alt-[ move preview left, Alt-] move preview right.
 (ENTER to confirm, Ctrl+C to return to main menu)" \
-                --bind 'ctrl-c:abort' \
-                --bind "alt-[:execute-silent(echo \$(($(cat $preview_file) + 10 > 90 ? 90 : $(cat $preview_file) + 10)) > $preview_file && echo 1 > $resize_flag)+abort" \
-                --bind "alt-]:execute-silent(echo \$(($(cat $preview_file) - 10 < 10 ? 10 : $(cat $preview_file) - 10)) > $preview_file && echo 1 > $resize_flag)+abort" \
-                --ansi)
-        else
-            # When not in a terminal, default to Quick Full Update
-            local selected_option="Quick Full Update (Auto-yes for yay and Flatpak)"
-        fi
+            --bind 'ctrl-c:abort' \
+            --bind "alt-[:execute-silent(echo \$(($(cat $preview_file) + 10 > 90 ? 90 : $(cat $preview_file) + 10)) > $preview_file && echo 1 > $resize_flag)+abort" \
+            --bind "alt-]:execute-silent(echo \$(($(cat $preview_file) - 10 < 10 ? 10 : $(cat $preview_file) - 10)) > $preview_file && echo 1 > $resize_flag)+abort" \
+            --ansi)
 
         if [[ -z "$selected_option" ]]; then
             if [ -t 0 ] && [[ $(cat "$resize_flag") -eq 1 ]]; then
@@ -208,7 +205,7 @@ update() {
                 flatpak update
                 break
                 ;;
-            "yay Update"*)
+            "yay System Update"*)
                 echo "Updating yay packages..."
                 yay -Syu
                 break
@@ -218,7 +215,7 @@ update() {
                 flatpak update
                 break
                 ;;
-            "AUR Development Packages Update (git)")
+            "Update AUR Development"*)
                 echo "Checking AUR development packages for updates..."
                 yay -Sua --devel
                 break
@@ -227,10 +224,8 @@ update() {
                 return
                 ;;
         esac
-    done
 }
 
-# Install Packages
 install() {
     local exit_function=false
     while ! $exit_function; do
@@ -286,34 +281,37 @@ install() {
             preview_width=$(cat "$preview_file")
             local fzf_options=(
                 -m --reverse
-                --preview '
+                --preview "
                     if pacman -Qi {1} &>/dev/null; then
-                        echo "Package Info (installed):"
+                        echo 'Package Info (installed):'
                         yay -Qi {1}
                         echo
-                        echo "Installed Files:"
-                        pacman -Ql {1} | grep -v "/$" | cut -d" " -f2-
+                        echo 'Installed Files:'
+                        pacman -Ql {1} | grep -v '/$' | cut -d' ' -f2-
                     else
-                        echo "Package Info (not installed):"
+                        echo 'Package Info (not installed):'
                         yay -Si {1}
                         echo
-                        if yay -Si {1} | grep -q "^Repository *: aur$"; then
-                            echo "PKGBUILD:"
-                            echo "Loading PKGBUILD... Please wait."
+                        if yay -Si {1} | grep -q '^Repository *: aur$'; then
+                            echo 'PKGBUILD:'
+                            echo 'Loading PKGBUILD... Please wait.'
+                            mkdir -p .spm_temp
+                            cd .spm_temp
                             yay -G {1} --noconfirm >/dev/null 2>&1
                             if [ -f {1}/PKGBUILD ]; then
-                                echo -e "\n--- PKGBUILD content ---\n"
+                                echo -e '\\n--- PKGBUILD content ---\\n'
                                 cat {1}/PKGBUILD
                             else
-                                echo "PKGBUILD not available"
+                                echo 'PKGBUILD not available'
                             fi
-                            rm -rf {1} 2>/dev/null
+                            cd ..
+                            rm -rf .spm_temp
                         else
-                            echo "Files that would be installed:"
-                            yay -Fl {1} 2>/dev/null | awk '\''{print $2}'\'' || echo "File list not available"
+                            echo 'Files that would be installed:'
+                            yay -Fl {1} 2>/dev/null | awk '{print \$2}' || echo 'File list not available'
                         fi
                     fi
-                '
+                "
                 --preview-window="right:$preview_width%:wrap"
                 --header "Select package(s) to install. Alt-[ move preview left, Alt-] move preview right.
 (TAB to select, ENTER to confirm, Ctrl+C to return)"
@@ -363,6 +361,8 @@ install() {
         handle_return
     fi
 }
+
+# Remove Packages
 
 remove() {
     local exit_function=false
@@ -660,6 +660,7 @@ sort_packages_by_exclusive_deps() {
         rm "$temp_file"
     done
 }
+
 # Dependencies Menu
 dependencies_menu() {
     while true; do
@@ -713,20 +714,39 @@ orphan() {
                 "Return to Main Menu"
             )
 
-            # Generate preview content
-            local preview_content=$(
-                bold=$(tput bold)
-                normal=$(tput sgr0)
-                echo "${bold}Orphaned Packages:${normal}"
-                pacman -Qdtq
-                echo
-                echo "${bold}Unneeded packages:${normal}"
-                pacman -Qqd | pacman -Rsu --print - 2>/dev/null
-            )
-
             preview_width=$(cat "$preview_file")
             local selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse \
-                --preview "echo \"$preview_content\"" \
+                --preview '
+                    bold=$(tput bold)
+                    normal=$(tput sgr0)
+                    
+                    echo -e "${bold}Command to execute:${normal}"
+                    case {} in
+                        "Quick remove"*)     
+                            echo "sudo pacman -Rns \$(pacman -Qdtq) --noconfirm"
+                            echo "sudo pacman -Rsu \$(pacman -Qqd) --noconfirm"
+                            ;;
+                        "Remove orphaned"*)  
+                            echo "sudo pacman -Rns \$(pacman -Qdtq)"
+                            ;;
+                        "Remove unneeded"*)  
+                            echo "sudo pacman -Rsu \$(pacman -Qqd)"
+                            ;;
+                        "Review and remove both"*)
+                            echo "sudo pacman -Rns \$(pacman -Qdtq)"
+                            echo "sudo pacman -Rsu \$(pacman -Qqd)"
+                            ;;
+                        *)                  
+                            echo "No command to execute"
+                            ;;
+                    esac
+                    echo
+                    echo "${bold}Orphaned Packages:${normal}"
+                    pacman -Qdtq
+                    echo
+                    echo "${bold}Unneeded packages:${normal}"
+                    pacman -Qqd | pacman -Rsu --print - 2>/dev/null
+                ' \
                 --preview-window="right:${preview_width}%:wrap" \
                 --preview-label='Orphaned and Unneeded Packages' \
                 --no-info \
@@ -835,6 +855,7 @@ $unneeded"
     esac
 }
 
+# Downgrade
 downgrade() {
     clear_screen
     echo "Downgrade Package(s)"
@@ -968,11 +989,10 @@ clear_cache() {
 
         local options=(
             "Quick Clear (Auto-yes for all prompts)"
-            "Clear Pacman Cache (Keep Latest Version)"
-            "Clear ALL Pacman Cache (Including Latest)"
+            "Clear ALL Cache (Including Latest Versions)"
+            "Clear Old Versions (Keep Current Only)"
             "Clear Uninstalled Packages Only"
-            "Clear Yay Cache"
-            "Clear Both Caches"
+            "Clear Yay Cache Only"
             "Return to Main Menu"
         )
 
@@ -985,14 +1005,42 @@ clear_cache() {
             --preview '
                 bold=$(tput bold)
                 normal=$(tput sgr0)
+                
+                echo "${bold}Command to execute:${normal}"
+                case {} in
+                    "Quick Clear"*)
+                        echo "sudo pacman -Sc --noconfirm"
+                        echo "yay -Sc --noconfirm"
+                        ;;
+                    "Clear ALL Cache"*)
+                        echo "sudo rm -f /var/cache/pacman/pkg/*.pkg.tar.*"
+                        echo "yay -Scc --noconfirm"
+                        ;;
+                    "Clear Old Versions"*)
+                        echo "sudo pacman -Sc"
+                        ;;
+                    "Clear Uninstalled Packages"*)
+                        echo "sudo pacman -Sc"
+                        ;;
+                    "Clear Yay Cache"*)
+                        echo "yay -Sc"
+                        ;;
+                    *)
+                        echo "No command to execute"
+                        ;;
+                esac
+                echo
                 echo "${bold}Current Cache Sizes:${normal}"
                 echo "Pacman cache: $(du -sh /var/cache/pacman/pkg | cut -f1)"
-                echo "Yay cache: $(du -sh ~/.cache/yay 2>/dev/null | cut -f1)"
+                # Only count package files in yay cache
+                yay_pkg_size=$(find ~/.cache/yay -name "*.pkg.tar.*" -type f -exec du -ch {} + 2>/dev/null | grep total$ | cut -f1)
+                if [[ -n "$yay_pkg_size" ]]; then
+                    echo "Yay package cache: $yay_pkg_size"
+                fi
                 echo
                 echo "${bold}Pacman Cache Details:${normal}"
                 echo "Total packages: $(ls -1 /var/cache/pacman/pkg/*.pkg.tar.* 2>/dev/null | wc -l)"
                 echo "Unique packages: $(ls -1 /var/cache/pacman/pkg/*.pkg.tar.* 2>/dev/null | sed '\''s/-[0-9].*$//'\'' | sort -u | wc -l)"
-                echo "Old versions: $(ls -1 /var/cache/pacman/pkg/*.pkg.tar.* 2>/dev/null | wc -l)"
                 echo
                 echo "${bold}Total Disk Usage:${normal}"
                 df -h / | awk "NR==2 {print \$3 \" used out of \" \$2 \" (\" \$5 \" used)\"}"
@@ -1022,38 +1070,28 @@ clear_cache() {
         fi
 
         case "$selected_option" in
-            "Quick Clear (Auto-yes for all prompts)")
+            "Quick Clear"*)
                 echo "Performing quick cache clear..."
-                echo "Clearing Pacman cache..."
-                # Remove all versions except the latest
-                sudo paccache -rk1 --noconfirm
-                # Remove all uninstalled package cache
-                sudo paccache -ruk0 --noconfirm
-                echo "Clearing Yay cache..."
+                echo "Clearing package caches..."
+                sudo pacman -Sc --noconfirm
+                yay -Sc --noconfirm
+                ;;
+            "Clear ALL Cache"*)
+                echo "Clearing ALL package caches..."
+                sudo rm -f /var/cache/pacman/pkg/*.pkg.tar.*
                 yay -Scc --noconfirm
                 ;;
-            "Clear Pacman Cache (Keep Latest Version)")
-                echo "Clearing Pacman cache but keeping latest version..."
-                sudo paccache -rv
+            "Clear Old Versions"*)
+                echo "Clearing old package versions..."
+                sudo pacman -Sc
                 ;;
-            "Clear ALL Pacman Cache (Including Latest)")
-                echo "Clearing ALL Pacman cache..."
-                sudo rm -f /var/cache/pacman/pkg/*.pkg.tar.*
-                ;;
-            "Clear Uninstalled Packages Only")
+            "Clear Uninstalled Packages"*)
                 echo "Clearing cache of uninstalled packages..."
-                sudo paccache -ruk0
+                sudo pacman -Sc
                 ;;
-            "Clear Yay Cache")
+            "Clear Yay Cache Only"*)
                 echo "Clearing Yay cache..."
-                yay -Scc
-                ;;
-            "Clear Both Caches")
-                echo "Clearing Pacman cache..."
-                sudo paccache -rv
-                sudo paccache -ruk0
-                echo "Clearing Yay cache..."
-                yay -Scc
+                yay -Sc
                 ;;
             "Return to Main Menu")
                 return
