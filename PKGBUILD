@@ -1,7 +1,7 @@
 pkgname=spm-arch
 pkgver=1.0.1
 pkgrel=1
-pkgdesc="Simple Package Manager Wrapper for Arch Linux"
+pkgdesc="Simple Package Manager FZF Wrapper for Arch Linux"
 arch=('any')
 url="https://github.com/adelmonte/Simple_Package_Manager"
 license=('GPL v3.0')
