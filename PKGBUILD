@@ -1,5 +1,5 @@
 pkgname=spm-arch
-pkgver=1.0.1
+pkgver=1.0.1.2
 pkgrel=1
 pkgdesc="Simple Package Manager FZF Wrapper for Arch Linux"
 arch=('any')
