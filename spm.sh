@@ -9,6 +9,22 @@
 # Define the update cache file path
 UPDATE_CACHE_FILE="/var/cache/spm/update-cache.txt"
 
+
+# Function to ensure the SPM var directory exists with proper permissions
+ensure_spm_var_dir() {
+    local dir="/var/cache/spm"
+    if [[ ! -d "$dir" ]]; then
+        sudo mkdir -p "$dir"
+    fi
+    # Make sure the directory is writable by the current user
+    if [[ ! -w "$dir" ]]; then
+        sudo chmod 777 "$dir"  # Or use a more restrictive permission if needed
+    fi
+}
+
+# Call the function early to ensure the directory exists
+ensure_spm_var_dir
+
 # Function to clear the screen and display the script name
 clear_screen() {
     clear
@@ -17,7 +33,7 @@ clear_screen() {
 
 # Function to initialize or read the preview width
 get_preview_width() {
-    local preview_file="/tmp/spm_preview_width"
+    local preview_file="/var/cache/spm/preview_width"
     if [[ ! -f "$preview_file" ]]; then
         echo "60" > "$preview_file"
     fi
@@ -130,8 +146,8 @@ update() {
     # Check if we're running in a terminal
     if [ -t 0 ]; then
         local preview_width=$(get_preview_width)
-        local preview_file="/tmp/spm_preview_width"
-        local resize_flag="/tmp/spm_resize_flag"
+        local preview_file="/var/cache/spm/preview_width"
+        local resize_flag="/var/cache/spm/resize_flag"
         local detailed_cache_file="/var/cache/spm/detailed-update-cache.txt"
         local menu_height
         # Initialize resize flag
@@ -197,28 +213,33 @@ update() {
                 echo "Performing quick update..."
                 yes | yay
                 flatpak update --assumeyes
-                break
+                echo "0" > "$UPDATE_CACHE_FILE"
+                echo "No updates available." > "$detailed_cache_file"
                 ;;
             "Full Update"*)
                 echo "Performing full update..."
                 yay
                 flatpak update
-                break
+                echo "0" > "$UPDATE_CACHE_FILE"
+                echo "No updates available." > "$detailed_cache_file"
                 ;;
             "yay System Update"*)
                 echo "Updating yay packages..."
                 yay -Syu
-                break
+                echo "0" > "$UPDATE_CACHE_FILE"
+                echo "No updates available." > "$detailed_cache_file"
                 ;;
             "Flatpak Update"*)
                 echo "Updating Flatpak apps..."
                 flatpak update
-                break
+                echo "0" > "$UPDATE_CACHE_FILE"
+                echo "No updates available." > "$detailed_cache_file"
                 ;;
             "Update AUR Development"*)
                 echo "Checking AUR development packages for updates..."
                 yay -Sua --devel
-                break
+                echo "0" > "$UPDATE_CACHE_FILE"
+                echo "No updates available." > "$detailed_cache_file"
                 ;;
             "Return to Main Menu")
                 return
@@ -235,8 +256,8 @@ install() {
         echo "Loading packages... This may take a moment."
         local search_query="$1"
         local preview_width=$(get_preview_width)
-        local preview_file="/tmp/spm_preview_width"
-        local resize_flag="/tmp/spm_resize_flag"
+        local preview_file="/var/cache/spm/preview_width"
+        local resize_flag="/var/cache/spm/resize_flag"
 
         # Initialize resize flag
         echo 0 > "$resize_flag"
@@ -370,8 +391,8 @@ remove() {
         clear_screen
         local search_query="$1"
         local preview_width=$(get_preview_width)
-        local preview_file="/tmp/spm_preview_width"
-        local resize_flag="/tmp/spm_resize_flag"
+        local preview_file="/var/cache/spm/preview_width"
+        local resize_flag="/var/cache/spm/resize_flag"
 
         # Initialize resize flag
         echo 0 > "$resize_flag"
@@ -484,8 +505,8 @@ explore_dependencies() {
         echo
 
         local preview_width=$(get_preview_width)
-        local preview_file="/tmp/spm_preview_width"
-        local resize_flag="/tmp/spm_resize_flag"
+        local preview_file="/var/cache/spm/preview_width"
+        local resize_flag="/var/cache/spm/resize_flag"
 
         # Initialize resize flag
         echo 0 > "$resize_flag"
@@ -543,8 +564,8 @@ sort_packages() {
         echo # New line after progress dots
 
         local preview_width=$(get_preview_width)
-        local preview_file="/tmp/spm_preview_width"
-        local resize_flag="/tmp/spm_resize_flag"
+        local preview_file="/var/cache/spm/preview_width"
+        local resize_flag="/var/cache/spm/resize_flag"
 
         # Initialize resize flag
         echo 0 > "$resize_flag"
@@ -608,8 +629,8 @@ sort_packages_by_exclusive_deps() {
         
         echo # New line after progress dots
         local preview_width=$(get_preview_width)
-        local preview_file="/tmp/spm_preview_width"
-        local resize_flag="/tmp/spm_resize_flag"
+        local preview_file="/var/cache/spm/preview_width"
+        local resize_flag="/var/cache/spm/resize_flag"
 
         # Initialize resize flag
         echo 0 > "$resize_flag"
@@ -700,8 +721,8 @@ orphan() {
         # Check if we're running in a terminal
         if [ -t 0 ]; then
             local preview_width=$(get_preview_width)
-            local preview_file="/tmp/spm_preview_width"
-            local resize_flag="/tmp/spm_resize_flag"
+            local preview_file="/var/cache/spm/preview_width"
+            local resize_flag="/var/cache/spm/resize_flag"
 
             # Initialize resize flag
             echo 0 > "$resize_flag"
@@ -863,8 +884,8 @@ downgrade() {
     
     local packages="$1"
     local preview_width=$(get_preview_width)
-    local preview_file="/tmp/spm_preview_width"
-    local resize_flag="/tmp/spm_resize_flag"
+    local preview_file="/var/cache/spm/preview_width"
+    local resize_flag="/var/cache/spm/resize_flag"
 
     echo 0 > "$resize_flag"
     
@@ -981,8 +1002,8 @@ clear_cache() {
         echo "-------------------"
         
         local preview_width=$(get_preview_width)
-        local preview_file="/tmp/spm_preview_width"
-        local resize_flag="/tmp/spm_resize_flag"
+        local preview_file="/var/cache/spm/preview_width"
+        local resize_flag="/var/cache/spm/resize_flag"
 
         # Initialize resize flag
         echo 0 > "$resize_flag"
@@ -1366,8 +1387,8 @@ pacman_config_menu() {
         local header_height=8
         local menu_height=$(($(tput lines) - $header_height - 1))
         local preview_width=$(get_preview_width)
-        local preview_file="/tmp/spm_preview_width"
-        local resize_flag="/tmp/spm_resize_flag"
+        local preview_file="/var/cache/spm/preview_width"
+        local resize_flag="/var/cache/spm/resize_flag"
 
         # Initialize resize flag
         echo 0 > "$resize_flag"
@@ -1509,8 +1530,8 @@ manager() {
     local menu_height=$(($(tput lines) - $header_height - 1))
     local preview_width
     local selected_option
-    local preview_file="/tmp/spm_preview_width"
-    local resize_flag="/tmp/spm_resize_flag"
+    local preview_file="/var/cache/spm/preview_width"
+    local resize_flag="/var/cache/spm/resize_flag"
 
     # Function to handle exit
     exit_script() {
