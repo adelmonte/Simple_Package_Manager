@@ -1,122 +1,127 @@
 # SPM - Simple Package Manager
 
-![Description of the GIF](spm.gif)
+![Simple Package Manager Interface](spm.gif)
 
-SPM is a Simple FZF Package Manager for Arch-based Linux distributions.  
+A lightweight, intuitive package manager interface for Arch-based Linux distributions that leverages the power of `fzf` to provide a seamless interactive experience for managing packages through `pacman` and `yay`.
 
-It provides an intuitive fzf interface for common package management tasks using `yay` and `pacman`.
+## ✨ Features
 
-## Features
+### 🖥️ Elegant Interactive Interface
+- **Dynamic FZF-powered menus** with real-time previews and adjustable preview windows
+- **Multi-select functionality** for efficient batch operations
+- **Context-aware information** showing package details, dependencies, and system status
+- **Intuitive navigation** with keyboard shortcuts and visual feedback
 
-### User-Friendly Interface
-- Interactive menu-driven interface powered by `fzf`
-- Multi-Select functionality for batch operations
-- Real-time package information preview
-- Recently installed and removed packages & pacman.conf previews
+### 📦 Comprehensive Package Management
+- **Smart installation system**
+  - Repository-prioritized package listing
+  - Detailed package information previews
+  - PKGBUILD preview for AUR packages
+  - Multi-select for batch installation
 
-### System Management
-- Comprehensive system update options
-  - Quick update (auto-yes for yay and Flatpak)
-  - Full update with review of all changes
-- Intelligent package installation
-  -Multi-Select
-  - Search and install from official repositories and AUR
-  - Display of package details, dependencies, files to install, and PKGBUILD (for AUR packages)
-- Flexible package removal
-  - Multi-Select
-  - Multiple removal options (including dependencies and config files)
-  - Preview of package info and installed files before removal
+- **Flexible removal options**
+  - Multiple removal modes with different dependency handling
+  - Preview installed files before removal
+  - Configurable confirmation prompts
 
-### Dependency Management
-- Orphaned package cleanup with various options
-- Advanced dependency exploration and analysis
-  - Interactive exploration of package dependencies
-  - Sorting packages by number of dependencies
-  - Sorting packages by number of exclusive dependencies
+- **Versatile update workflows**
+  - Quick updates with auto-confirmation
+  - Detailed review mode for cautious updating
+  - Selective update options (system, flatpak, AUR dev packages)
 
-### System Maintenance
-- Package downgrading functionality
-  - Search and downgrade from local cache
-  - Option to search and download from Arch Linux Archive (ALA)
-- Cache clearing with quick and interactive options
-- Monitoring of system status
-  - Display of total installed packages
-  - Real-time tracking of Pacman and Yay cache sizes
-  - Available updates counter
+### 🔗 Advanced Dependency Management
+- **Orphaned package cleanup** with multiple handling options
+- **Dependency exploration tools**:
+  - Interactive dependency browser
+  - Package sorting by dependency count
+  - Exclusive dependency analysis
+
+### 🛠️ System Maintenance Utilities
+- **Downgrade functionality**
+  - Local cache searching
+  - Arch Linux Archive (ALA) integration
+  - Version preview and selection
   
-## Warning
-- (Optional) shell sources will hijack `install` command
+- **Cache management**
+  - Configurable cache clearing options
+  - Space usage monitoring
+  - Per-repository cache statistics
 
-## Prerequisites
+- **Pacman configuration interface**
+  - Visual editor for pacman.conf
+  - Repository enabling/disabling
+  - Option toggling with explanations
 
-SPM requires the following dependencies:
+## 📥 Installation
 
-- `fzf`: For the interactive interface
-- `yay`: For AUR package management
-
-## Installation
+```bash
+yay -S spm-arch
 ```
-yay spm-arch
+
+### Post-Installation Setup
+
+#### Enable Update Monitoring (Required) ⚠️
+```bash
+systemctl enable --now spm_updates.timer
 ```
-Enable Optional Shell Sources for standalone arguments:  
 
-- For Bash users:
-`echo 'source /usr/bin/spm' >> ~/.bashrc`
-
-- For Fish users:
-`echo 'source /usr/share/fish/vendor_functions.d/spm.fish' >> ~/.config/fish/config.fish`
-
-To enable (required) available update checking:  
+#### Shell Integration for Direct Commands (Optional)
+For Bash users:
+```bash
+echo 'source /usr/bin/spm' >> ~/.bashrc
 ```
-systemctl enable --now spm_updates.timer  
+
+For Fish users:
+```bash
+echo 'source /usr/share/fish/vendor_functions.d/spm.fish' >> ~/.config/fish/config.fish
 ```
-Without the service, the install command does not sync package databases before install, which could cause issues. If the function did not work this way, it would require entering sudo password every time to access the install fzf function and also to check if updates are available.
 
-The systemd timer is defaulted to run every 5 minutes and stores it's value in `/var/cache/spm/update-cache.txt`
-
-The update service can be manually triggered from shell with `spm_updates`
-
-## Usage
+## 🚀 Usage
 
 ### Interactive Mode
 
-To launch SPM in interactive mode, simply run:
-
-```
+Simply run:
+```bash
 spm
 ```
 
-This will present you with a menu of available options.
+Navigate with arrow keys, select with Enter, and multi-select with Tab where applicable.
 
-### Command-line Options
+### Command Line Options
 
-SPM also supports command-line options for quick access to specific functions:
+| Option | Standalone | Description |
+|--------|------------|-------------|
+| `-u`, `update` | `update` | Update system packages |
+| `-i`, `install` | `install [pkg]` | Install specified packages |
+| `-r`, `remove` | `remove [pkg]` | Remove specified packages |
+| `-o`, `orphan` | `orphan` | Clean orphaned packages |
+| `-d`, `downgrade` | `downgrade` | Downgrade packages |
+| `-c`, `cache` | N/A | Clear package cache |
+| `-h`, `--help` | N/A | Display help information |
 
-- `-u`   or `update`: Update packages
-- `-i *` or `install`: Install packages
-- `-r *` or `remove`: Remove packages
-- `-o`   or `orphan`: Clean orphaned packages
-- `-h`   or `--help`: Display help message
+**Note**: Standalone commands require shell integration.
 
-Example usage:
+### 💡 Tips and Shortcuts
 
-```
-$ spm -i fzf	# Install packages
-$ spm -r fzf    # Remove package
-$ spm -u        # Updates entire system (alternative)
-$ spm -o        # Clean orphaned packages (alternative)
-$ spm -d        # Downgrade a package
-$ spm -c        # Clear package cache
+- Use **Alt+[** and **Alt+]** to adjust preview window size
+- Press **Tab** to multi-select packages
+- Press **Ctrl+C** to return to previous menu or exit
+- View system status in the header bar (packages, updates, cache sizes)
 
-OR with the optional shell sources from the instructions above:
+## ⚙️ Requirements
 
-$ install fzf   # Also finds fzf package to install
-$ remove fzf    # Also finds fzf package to remove
-$ update        # Updates entire system
-$ orphan        # Clean orphaned packages
-$ downgrade     # Downgrade a package
-```
+- `fzf`: For interactive interface functionality
+- `yay`: For AUR package management
+- `pacman`: Base package management (included in all Arch systems)
 
-## License
+## 📝 License
 
-This project is open source and available under the [GPL v3.0 License](LICENSE).
+This project is released under the [GPL v3.0 License](LICENSE).
+
+## ⏰ Notes on Update Service
+
+The update monitoring service:
+- Runs by default every 5 minutes
+- Stores update information in `/var/cache/spm/update-cache.txt`
+- Can be manually triggered with `spm_updates`
+- Ensures package databases are synchronized before installations
