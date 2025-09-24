@@ -4,15 +4,15 @@
 
 A lightweight, intuitive package manager interface for Arch-based Linux distributions that leverages the power of `fzf` to provide a seamless interactive experience for managing packages through `pacman` and `yay`.
 
-## ✨ Features
+## Features
 
-### 🖥️ Elegant Interactive Interface
+### Elegant Interactive Interface
 - **Dynamic FZF-powered menus** with real-time previews and adjustable preview windows
 - **Multi-select functionality** for efficient batch operations
 - **Context-aware information** showing package details, dependencies, and system status
 - **Intuitive navigation** with keyboard shortcuts and visual feedback
 
-### 📦 Comprehensive Package Management
+### Comprehensive Package Management
 - **Smart installation system**
   - Repository-prioritized package listing
   - Detailed package information previews
@@ -29,19 +29,19 @@ A lightweight, intuitive package manager interface for Arch-based Linux distribu
   - Detailed review mode for cautious updating
   - Selective update options (system, flatpak, AUR dev packages)
 
-### 🔗 Advanced Dependency Management
+### Advanced Dependency Management
 - **Orphaned package cleanup** with multiple handling options
-- **Dependency exploration tools**:
+- **Dependency exploration tools**
   - Interactive dependency browser
   - Package sorting by dependency count
   - Exclusive dependency analysis
 
-### 🛠️ System Maintenance Utilities
+### System Maintenance Utilities
 - **Downgrade functionality**
   - Local cache searching
   - Arch Linux Archive (ALA) integration
   - Version preview and selection
-  
+
 - **Cache management**
   - Configurable cache clearing options
   - Space usage monitoring
@@ -52,7 +52,7 @@ A lightweight, intuitive package manager interface for Arch-based Linux distribu
   - Repository enabling/disabling
   - Option toggling with explanations
 
-## 📥 Installation
+## Installation
 
 ```bash
 yay -S spm-arch
@@ -60,12 +60,12 @@ yay -S spm-arch
 
 ### Post-Installation Setup
 
-#### Enable Update Monitoring (Required) ⚠️
+#### Enable Update Monitoring **[Required]**
 ```bash
 systemctl enable --now spm_updates.timer
 ```
 
-#### Shell Integration for Direct Commands (Optional)
+#### Shell Integration for Direct Commands **[Optional]**
 For Bash users:
 ```bash
 echo 'source /usr/bin/spm' >> ~/.bashrc
@@ -76,10 +76,9 @@ For Fish users:
 echo 'source /usr/share/fish/vendor_functions.d/spm.fish' >> ~/.config/fish/config.fish
 ```
 
-## 🚀 Usage
+## Usage
 
 ### Interactive Mode
-
 Simply run:
 ```bash
 spm
@@ -99,27 +98,23 @@ Navigate with arrow keys, select with Enter, and multi-select with Tab where app
 | `-c`, `cache` | N/A | Clear package cache |
 | `-h`, `--help` | N/A | Display help information |
 
-**Note**: Standalone commands require shell integration.
+**Note:** Standalone commands require shell integration.
 
-### 💡 Tips and Shortcuts
-
+### Tips and Shortcuts
 - Use **Alt+[** and **Alt+]** to adjust preview window size
 - Press **Tab** to multi-select packages
 - Press **Ctrl+C** to return to previous menu or exit
 - View system status in the header bar (packages, updates, cache sizes)
 
-## ⚙️ Requirements
+## Requirements
+- `fzf` - For interactive interface functionality
+- `yay` - For AUR package management
+- `pacman` - Base package management (included in all Arch systems)
 
-- `fzf`: For interactive interface functionality
-- `yay`: For AUR package management
-- `pacman`: Base package management (included in all Arch systems)
-
-## 📝 License
-
+## License
 This project is released under the [GPL v3.0 License](LICENSE).
 
-## ⏰ Notes on Update Service
-
+## Notes on Update Service
 The update monitoring service:
 - Runs by default every 5 minutes
 - Stores update information in `/var/cache/spm/update-cache.txt`
