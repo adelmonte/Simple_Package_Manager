@@ -1,9 +1,9 @@
 [Unit]
-Description=Run SPM update cache every 5 minutes
+Description=Run SPM update cache every hour
 
 [Timer]
 OnBootSec=5min
-OnUnitActiveSec=5min
+OnUnitActiveSec=1h
 Unit=spm_updates.service
 
 [Install]
