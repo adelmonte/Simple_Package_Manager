@@ -17,7 +17,7 @@ SPM replaces command-line package management with an interactive interface. Inst
 
 ## Key Features
 
-**Cache intelligence** - Automatic background sync keeps package lists current for fast searchin
+**Cache intelligence** - Automatic background sync keeps package lists current for fast searching
 
 **Visual package browser** - Search and install from all repositories with live package information, descriptions, and dependencies displayed as you navigate
 
