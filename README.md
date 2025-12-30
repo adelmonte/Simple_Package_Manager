@@ -27,6 +27,10 @@ SPM replaces command-line package management with an interactive interface. Inst
 
 **Dependency analysis** - See what depends on what, find orphaned packages, and understand removal impact before you commit
 
+**Hook manager** - View, create, edit, and manage ALPM hooks with full CRUD operations for user hooks and read-only access to system hooks
+
+**Pacnew/Pacsave manager** - Find and resolve .pacnew and .pacsave files with diff previews and bulk actions
+
 **Interactive configuration** - Edit pacman.conf options and manage repositories without opening a text editor
 
 ## Installation
@@ -50,6 +54,8 @@ spm -u              # Update
 spm -o              # Clean orphans
 spm -d [package]    # Downgrade
 spm -c              # Manage cache
+spm -H              # Manage ALPM hooks
+spm -p              # Manage pacnew/pacsave files
 ```
 
 ## Requirements

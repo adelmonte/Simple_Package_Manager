@@ -96,6 +96,8 @@ show_help() {
     echo "  ${green}-o${normal}, ${green}orphan${normal}        Clean orphaned packages (interactive menu)"
     echo "  ${green}-d${normal}, ${green}downgrade${normal}     Downgrade packages"
     echo "  ${green}-c${normal}, ${green}cache${normal}         Clear package cache (interactive menu)"
+    echo "  ${green}-p${normal}, ${green}pacnew${normal}        Manage .pacnew and .pacsave files"
+    echo "  ${green}-H${normal}, ${green}hooks${normal}         Manage ALPM hooks"
     echo "  ${green}-h${normal}, ${green}--help${normal}        Display this help message"
     echo
     echo "${bold}EXAMPLES:${normal}"
@@ -297,13 +299,11 @@ install() {
 
         echo 0 > "$resize_flag"
 
-        # Check if cache exists and if timer is enabled
         local regenerate_cache=false
         
         if [[ ! -f "$cache_file" ]]; then
             regenerate_cache=true
         elif ! systemctl is-enabled spm_updates.timer &>/dev/null; then
-            # Timer is not enabled, regenerate cache every time
             regenerate_cache=true
         fi
 
@@ -367,8 +367,7 @@ install() {
                 rm -f "$cache_file"
                 continue
             fi
-            
-            # Show a message if timer is not enabled
+
             if ! systemctl is-enabled spm_updates.timer &>/dev/null; then
                 echo
                 echo "Note: Enable spm_updates.timer to keep the cache updated automatically:"
@@ -415,7 +414,7 @@ install() {
                 " \
                 --preview-window="right:$preview_width%:wrap" \
                 --preview-label=' Package Information ' \
-                --header="Select packages to install - Tab to multi-select | Enter to confirm | Ctrl+C to return
+                --header="Select package(s) to install - Tab to multi-select | Enter to confirm | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
                 --bind 'ctrl-c:abort' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
@@ -539,7 +538,7 @@ remove() {
             ' \
             --preview-window="right:$preview_width%:wrap" \
             --preview-label=' Package Information ' \
-            --header="Select packages to remove - Tab to multi-select | Enter to confirm | Ctrl+C to return
+            --header="Select package(s) to remove - Tab to multi-select | Enter to confirm | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
             --bind 'ctrl-c:abort' \
             --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
@@ -1473,10 +1472,10 @@ downgrade() {
         
         local header_text
         if [ $CLI_MODE -eq 1 ]; then
-            header_text="Select packages to downgrade - Tab to multi-select | Enter to confirm | Ctrl+C to exit
+            header_text="Select package(s) to downgrade - Tab to multi-select | Enter to confirm | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview"
         else
-            header_text="Select packages to downgrade - Tab to multi-select | Enter to confirm | Ctrl+C to return
+            header_text="Select package(s) to downgrade - Tab to multi-select | Enter to confirm | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview"
         fi
         
@@ -1924,6 +1923,728 @@ Alt+[ increase preview | Alt+] decrease preview"
     done
 }
 
+pacnew_pacsave_manager() {
+    while true; do
+        clear_screen
+
+        local preview_width=$(get_preview_width)
+        local preview_file="/var/cache/spm/preview_width"
+        local resize_flag="/var/cache/spm/resize_flag"
+
+        echo 0 > "$resize_flag"
+
+        local menu_label
+        local header_text
+        if [ $CLI_MODE -eq 1 ]; then
+            menu_label="← Exit"
+            header_text="Select a file to manage | Ctrl+C to exit
+Alt+[ increase preview | Alt+] decrease preview"
+        else
+            menu_label="← Menu"
+            header_text="Select a file to manage | Ctrl+C to return
+Alt+[ increase preview | Alt+] decrease preview"
+        fi
+
+        local header_height=7
+        local menu_height=$(($(tput lines) - $header_height - 1))
+
+        local config_files=$(sudo find /etc -type f \( -name "*.pacnew" -o -name "*.pacsave" \) 2>/dev/null | sort)
+
+        if [ -z "$config_files" ]; then
+            echo "No .pacnew or .pacsave files found!"
+            echo
+            if [ $CLI_MODE -eq 1 ]; then
+                read -p "Press any key to exit... " -n 1 -s -r
+                echo
+                clear
+                echo "Exiting SPM - Simple Package Manager. Goodbye!"
+            else
+                read -p "Press any key to return to menu... " -n 1 -s -r
+                echo
+            fi
+            return
+        fi
+
+        local pacnew_count=$(echo "$config_files" | grep -c '\.pacnew$' || echo 0)
+        local pacsave_count=$(echo "$config_files" | grep -c '\.pacsave$' || echo 0)
+
+        local file_list=""
+
+        if [ "$pacnew_count" -gt 0 ]; then
+            file_list="[BULK] Delete All Pacnew ($pacnew_count files)
+[BULK] Apply All Pacnew ($pacnew_count files)"
+        fi
+        if [ "$pacsave_count" -gt 0 ]; then
+            if [ -n "$file_list" ]; then
+                file_list="$file_list
+[BULK] Delete All Pacsave ($pacsave_count files)"
+            else
+                file_list="[BULK] Delete All Pacsave ($pacsave_count files)"
+            fi
+        fi
+
+        local individual_files=$(echo "$config_files" | while read -r file; do
+            if [[ "$file" == *.pacnew ]]; then
+                echo "[PACNEW] $file"
+            else
+                echo "[PACSAVE] $file"
+            fi
+        done)
+
+        if [ -n "$file_list" ]; then
+            file_list=$(printf '%s\n%s\n%s' "$file_list" "$individual_files" "$menu_label")
+        else
+            file_list=$(printf '%s\n%s' "$individual_files" "$menu_label")
+        fi
+
+        while true; do
+            preview_width=$(cat "$preview_file")
+
+            local selected=$(echo "$file_list" | fzf --reverse \
+                --style=full:line \
+                --no-highlight-line \
+                --layout=reverse-list \
+                --cycle \
+                --preview-border=rounded \
+                --header-border=line \
+                --border-label=" Pacnew/Pacsave Manager " \
+                --preview '
+                    bold=$(tput bold)
+                    normal=$(tput sgr0)
+                    cyan=$(tput setaf 6)
+                    yellow=$(tput setaf 3)
+                    green=$(tput setaf 2)
+
+                    selection="{}"
+
+                    if [[ "$selection" == "← Menu" || "$selection" == "← Exit" ]]; then
+                        echo -e "${bold}${cyan}Return to Menu${normal}"
+                        echo
+                        echo "Go back to the main SPM menu."
+                        exit 0
+                    fi
+
+                    if [[ "$selection" == "[BULK] Delete All Pacnew"* ]]; then
+                        echo -e "${bold}${cyan}Bulk Action: Delete All Pacnew${normal}"
+                        echo
+                        echo -e "${bold}${yellow}This will delete all .pacnew files,${normal}"
+                        echo -e "${bold}${yellow}keeping your current configurations.${normal}"
+                        echo
+                        echo "Use this when you want to keep your existing configs"
+                        echo "and discard the new package defaults."
+                        echo
+                        echo -e "${bold}Files that will be deleted:${normal}"
+                        sudo find /etc -name "*.pacnew" 2>/dev/null | head -20
+                        exit 0
+                    fi
+
+                    if [[ "$selection" == "[BULK] Apply All Pacnew"* ]]; then
+                        echo -e "${bold}${cyan}Bulk Action: Apply All Pacnew${normal}"
+                        echo
+                        echo -e "${bold}${yellow}This will replace all current configs${normal}"
+                        echo -e "${bold}${yellow}with their .pacnew versions.${normal}"
+                        echo
+                        echo -e "${bold}WARNING:${normal} Your current configurations will be overwritten!"
+                        echo
+                        echo -e "${bold}Files that will be replaced:${normal}"
+                        sudo find /etc -name "*.pacnew" 2>/dev/null | sed "s/.pacnew$//" | head -20
+                        exit 0
+                    fi
+
+                    if [[ "$selection" == "[BULK] Delete All Pacsave"* ]]; then
+                        echo -e "${bold}${cyan}Bulk Action: Delete All Pacsave${normal}"
+                        echo
+                        echo -e "${bold}${green}This will delete all .pacsave backup files.${normal}"
+                        echo
+                        echo "Use this to clean up old configuration backups"
+                        echo "that were preserved when packages were removed."
+                        echo
+                        echo -e "${bold}Files that will be deleted:${normal}"
+                        sudo find /etc -name "*.pacsave" 2>/dev/null | head -20
+                        exit 0
+                    fi
+
+                    file=$(echo "$selection" | sed "s/^\[PAC[A-Z]*\] //")
+
+                    if [[ "$file" == *.pacnew ]]; then
+                        original="${file%.pacnew}"
+                        echo -e "${bold}${cyan}Pacnew File${normal}"
+                        echo
+                        echo -e "${bold}Original:${normal} $original"
+                        echo -e "${bold}New:${normal} $file"
+                        echo
+                        echo -e "${bold}${yellow}A new version of this config was installed.${normal}"
+                        echo "Review the differences and decide which to keep."
+                    else
+                        original="${file%.pacsave}"
+                        echo -e "${bold}${cyan}Pacsave File${normal}"
+                        echo
+                        echo -e "${bold}Current:${normal} $original"
+                        echo -e "${bold}Backup:${normal} $file"
+                        echo
+                        echo -e "${bold}${green}Your config was preserved during package removal.${normal}"
+                        echo "The backup contains your old configuration."
+                    fi
+
+                    echo
+                    echo -e "${bold}=== DIFFERENCES ===${normal}"
+                    echo
+
+                    if [ -f "$original" ] && [ -f "$file" ]; then
+                        if command -v delta > /dev/null; then
+                            delta --paging=never --line-numbers "$original" "$file" 2>/dev/null || echo "Cannot show diff"
+                        elif command -v git > /dev/null; then
+                            git diff --no-index --color=always "$original" "$file" 2>/dev/null || echo "Files are identical or cannot show diff"
+                        else
+                            diff --color=always -u "$original" "$file" 2>/dev/null || echo "Files are identical or cannot show diff"
+                        fi
+                    elif [ ! -f "$original" ]; then
+                        echo "Original file does not exist."
+                        echo
+                        echo -e "${bold}New file contents:${normal}"
+                        head -50 "$file" 2>/dev/null
+                    else
+                        echo "Cannot compare files."
+                    fi
+                ' \
+                --preview-window="right:${preview_width}%:wrap" \
+                --preview-label=' File Comparison ' \
+                --header="$header_text" \
+                --bind 'ctrl-c:abort' \
+                --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                --height=$menu_height \
+                --ansi)
+
+            if [[ -z "$selected" ]]; then
+                if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
+                    echo 0 > "$resize_flag"
+                    continue
+                else
+                    if [ $CLI_MODE -eq 1 ]; then
+                        clear
+                        echo "Exiting SPM - Simple Package Manager. Goodbye!"
+                    fi
+                    return
+                fi
+            fi
+
+            break
+        done
+
+        if [[ "$selected" == "← Menu" || "$selected" == "← Exit" ]]; then
+            if [ $CLI_MODE -eq 1 ]; then
+                clear
+                echo "Exiting SPM - Simple Package Manager. Goodbye!"
+            fi
+            return
+        fi
+
+        if [[ "$selected" == "[BULK] Delete All Pacnew"* ]]; then
+            clear_screen
+            echo "Bulk Action: Delete All Pacnew Files"
+            echo "====================================="
+            echo
+            local pacnew_files=$(sudo find /etc -name "*.pacnew" 2>/dev/null)
+            echo "The following files will be deleted:"
+            echo "$pacnew_files"
+            echo
+            local confirm
+            read -p "Delete all .pacnew files? [y/N]: " confirm
+            if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                echo "$pacnew_files" | while read -r f; do
+                    sudo rm -v "$f"
+                done
+                echo
+                echo "All .pacnew files deleted."
+            else
+                echo "Cancelled."
+            fi
+            sleep 2
+            continue
+        fi
+
+        if [[ "$selected" == "[BULK] Apply All Pacnew"* ]]; then
+            clear_screen
+            echo "Bulk Action: Apply All Pacnew Files"
+            echo "===================================="
+            echo
+            local pacnew_files=$(sudo find /etc -name "*.pacnew" 2>/dev/null)
+            echo "The following configs will be REPLACED with new versions:"
+            echo "$pacnew_files" | sed 's/.pacnew$//'
+            echo
+            echo "WARNING: Your current configurations will be overwritten!"
+            echo
+            local confirm
+            read -p "Apply all .pacnew files? [y/N]: " confirm
+            if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                echo "$pacnew_files" | while read -r f; do
+                    local orig="${f%.pacnew}"
+                    sudo mv -v "$f" "$orig"
+                done
+                echo
+                echo "All .pacnew files applied."
+            else
+                echo "Cancelled."
+            fi
+            sleep 2
+            continue
+        fi
+
+        if [[ "$selected" == "[BULK] Delete All Pacsave"* ]]; then
+            clear_screen
+            echo "Bulk Action: Delete All Pacsave Files"
+            echo "======================================"
+            echo
+            local pacsave_files=$(sudo find /etc -name "*.pacsave" 2>/dev/null)
+            echo "The following backup files will be deleted:"
+            echo "$pacsave_files"
+            echo
+            local confirm
+            read -p "Delete all .pacsave files? [y/N]: " confirm
+            if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                echo "$pacsave_files" | while read -r f; do
+                    sudo rm -v "$f"
+                done
+                echo
+                echo "All .pacsave files deleted."
+            else
+                echo "Cancelled."
+            fi
+            sleep 2
+            continue
+        fi
+
+        local file=$(echo "$selected" | sed 's/^\[PAC[A-Z]*\] //')
+        local original
+        local file_type
+
+        if [[ "$file" == *.pacnew ]]; then
+            original="${file%.pacnew}"
+            file_type="pacnew"
+        else
+            original="${file%.pacsave}"
+            file_type="pacsave"
+        fi
+
+        clear_screen
+        echo "File: $original"
+        echo "Type: .$file_type"
+        echo
+        echo "=== DIFFERENCES ==="
+        echo
+
+        if [ -f "$original" ] && [ -f "$file" ]; then
+            if command -v delta > /dev/null; then
+                delta --paging=always "$original" "$file"
+            elif command -v git > /dev/null; then
+                git diff --no-index --color=always "$original" "$file" | less -R
+            else
+                diff --color=always -u "$original" "$file" | less -R
+            fi
+        elif [ ! -f "$original" ]; then
+            echo "Original file does not exist."
+            echo
+            less "$file"
+        fi
+
+        echo
+        echo "What do you want to do?"
+        if [[ "$file_type" == "pacnew" ]]; then
+            echo "1) Keep current config (delete .pacnew)"
+            echo "2) Use new config (replace current with .pacnew)"
+        else
+            echo "1) Keep current config (delete .pacsave backup)"
+            echo "2) Restore backup (replace current with .pacsave)"
+        fi
+        echo "3) Edit manually with diff editor"
+        echo "4) Skip"
+
+        local choice
+        read -p "Choice [1-4]: " choice
+
+        case $choice in
+            1)
+                sudo rm "$file"
+                echo "Kept current config, deleted .$file_type"
+                ;;
+            2)
+                sudo mv "$file" "$original"
+                if [[ "$file_type" == "pacnew" ]]; then
+                    echo "Replaced with new version"
+                else
+                    echo "Restored backup"
+                fi
+                ;;
+            3)
+                if command -v nvim > /dev/null; then
+                    sudo nvim -d "$original" "$file"
+                elif command -v vim > /dev/null; then
+                    sudo vimdiff "$original" "$file"
+                else
+                    echo "No diff editor available (nvim or vim required)"
+                    sleep 2
+                fi
+                echo "After editing, you may want to delete .$file_type manually if satisfied"
+                ;;
+            4|*)
+                echo "Skipped"
+                ;;
+        esac
+
+        echo
+        if [ $CLI_MODE -eq 1 ]; then
+            read -p "Press any key to continue or Ctrl+C to exit... " -n 1 -s -r
+            echo
+        else
+            read -p "Press any key to continue... " -n 1 -s -r
+            echo
+        fi
+    done
+}
+
+hook_manager() {
+    local user_hooks_dir="/etc/pacman.d/hooks"
+    local system_hooks_dir="/usr/share/libalpm/hooks"
+
+    while true; do
+        clear_screen
+
+        local preview_width=$(get_preview_width)
+        local preview_file="/var/cache/spm/preview_width"
+        local resize_flag="/var/cache/spm/resize_flag"
+
+        echo 0 > "$resize_flag"
+
+        local menu_label
+        local header_text
+        if [ $CLI_MODE -eq 1 ]; then
+            menu_label="← Exit"
+            header_text="Select a hook to manage | Ctrl+C to exit
+Alt+[ increase preview | Alt+] decrease preview"
+        else
+            menu_label="← Menu"
+            header_text="Select a hook to manage | Ctrl+C to return
+Alt+[ increase preview | Alt+] decrease preview"
+        fi
+
+        local header_height=7
+        local menu_height=$(($(tput lines) - $header_height - 1))
+
+        local hook_list=""
+
+        hook_list="[+] Create New Hook"
+
+        if [ -d "$user_hooks_dir" ]; then
+            local user_hooks=$(find "$user_hooks_dir" -maxdepth 1 -type f \( -name "*.hook" -o -name "*.hook.disabled" \) 2>/dev/null | sort)
+            if [ -n "$user_hooks" ]; then
+                while IFS= read -r hook; do
+                    local name=$(basename "$hook")
+                    if [[ "$name" == *.disabled ]]; then
+                        hook_list=$(printf '%s\n%s' "$hook_list" "[USER] [DISABLED] $name")
+                    else
+                        hook_list=$(printf '%s\n%s' "$hook_list" "[USER] [ENABLED] $name")
+                    fi
+                done <<< "$user_hooks"
+            fi
+        fi
+
+        if [ -d "$system_hooks_dir" ]; then
+            local system_hooks=$(find "$system_hooks_dir" -maxdepth 1 -type f -name "*.hook" 2>/dev/null | sort)
+            if [ -n "$system_hooks" ]; then
+                while IFS= read -r hook; do
+                    local name=$(basename "$hook")
+                    hook_list=$(printf '%s\n%s' "$hook_list" "[SYSTEM] $name")
+                done <<< "$system_hooks"
+            fi
+        fi
+
+        hook_list=$(printf '%s\n%s' "$hook_list" "$menu_label")
+
+        while true; do
+            preview_width=$(cat "$preview_file")
+
+            local selected=$(echo "$hook_list" | fzf --reverse \
+                --style=full:line \
+                --no-highlight-line \
+                --layout=reverse-list \
+                --cycle \
+                --preview-border=rounded \
+                --header-border=line \
+                --border-label=" ALPM Hook Manager " \
+                --preview '
+                    bold=$(tput bold)
+                    normal=$(tput sgr0)
+                    cyan=$(tput setaf 6)
+                    yellow=$(tput setaf 3)
+                    green=$(tput setaf 2)
+
+                    case {} in
+                        "← Menu"|"← Exit")
+                            echo -e "${bold}${cyan}Return to Menu${normal}"
+                            echo
+                            echo "Go back to the main SPM menu."
+                            ;;
+                        "[+] Create New Hook")
+                            echo -e "${bold}${cyan}Create New Hook${normal}"
+                            echo
+                            echo "Create a new ALPM hook in /etc/pacman.d/hooks/"
+                            echo
+                            echo -e "${bold}Hook Structure:${normal}"
+                            echo "[Trigger]"
+                            echo "Operation = Install|Upgrade|Remove"
+                            echo "Type = Package|Path|File"
+                            echo "Target = <package-name-or-path>"
+                            echo
+                            echo "[Action]"
+                            echo "When = PreTransaction|PostTransaction"
+                            echo "Exec = /path/to/script"
+                            ;;
+                        "[USER] [DISABLED]"*)
+                            name=$(echo {} | sed "s/\[USER\] \[DISABLED\] //")
+                            echo -e "${bold}${yellow}[USER] [DISABLED]${normal}"
+                            echo -e "${bold}Location:${normal} /etc/pacman.d/hooks/$name"
+                            echo -e "${bold}Editable:${normal} Yes"
+                            echo
+                            echo -e "${bold}=== HOOK CONTENT ===${normal}"
+                            echo
+                            cat "/etc/pacman.d/hooks/$name" 2>/dev/null
+                            ;;
+                        "[USER] [ENABLED]"*)
+                            name=$(echo {} | sed "s/\[USER\] \[ENABLED\] //")
+                            echo -e "${bold}${green}[USER] [ENABLED]${normal}"
+                            echo -e "${bold}Location:${normal} /etc/pacman.d/hooks/$name"
+                            echo -e "${bold}Editable:${normal} Yes"
+                            echo
+                            echo -e "${bold}=== HOOK CONTENT ===${normal}"
+                            echo
+                            cat "/etc/pacman.d/hooks/$name" 2>/dev/null
+                            ;;
+                        "[SYSTEM]"*)
+                            name=$(echo {} | sed "s/\[SYSTEM\] //")
+                            echo -e "${bold}${cyan}[SYSTEM]${normal}"
+                            echo -e "${bold}Location:${normal} /usr/share/libalpm/hooks/$name"
+                            echo -e "${bold}Editable:${normal} No (package-provided)"
+                            echo
+                            echo -e "${bold}=== HOOK CONTENT ===${normal}"
+                            echo
+                            cat "/usr/share/libalpm/hooks/$name" 2>/dev/null
+                            ;;
+                    esac
+                ' \
+                --preview-window="right:${preview_width}%:wrap" \
+                --preview-label=' Hook Details ' \
+                --header="$header_text" \
+                --bind 'ctrl-c:abort' \
+                --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                --height=$menu_height \
+                --ansi)
+
+            if [[ -z "$selected" ]]; then
+                if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
+                    echo 0 > "$resize_flag"
+                    continue
+                else
+                    if [ $CLI_MODE -eq 1 ]; then
+                        clear
+                        echo "Exiting SPM - Simple Package Manager. Goodbye!"
+                    fi
+                    return
+                fi
+            fi
+
+            break
+        done
+
+        if [[ "$selected" == "← Menu" || "$selected" == "← Exit" ]]; then
+            if [ $CLI_MODE -eq 1 ]; then
+                clear
+                echo "Exiting SPM - Simple Package Manager. Goodbye!"
+            fi
+            return
+        fi
+
+        if [[ "$selected" == "[+] Create New Hook" ]]; then
+            clear_screen
+            echo "Create New Hook"
+            echo "==============="
+            echo
+            echo "Hooks will be created in: $user_hooks_dir/"
+            echo
+
+            local hook_name
+            read -p "Enter hook name (without .hook extension): " hook_name
+
+            if [ -z "$hook_name" ]; then
+                echo "No name provided. Cancelled."
+                sleep 1
+                continue
+            fi
+
+            local hook_path="$user_hooks_dir/${hook_name}.hook"
+
+            if [ -f "$hook_path" ]; then
+                echo "Hook already exists: $hook_path"
+                sleep 2
+                continue
+            fi
+
+            sudo mkdir -p "$user_hooks_dir"
+
+            local template="[Trigger]
+Operation = Upgrade
+Type = Package
+Target = *
+
+[Action]
+Description = ${hook_name}
+When = PostTransaction
+Exec = /bin/true
+"
+            echo "$template" | sudo tee "$hook_path" > /dev/null
+
+            echo "Created hook template: $hook_path"
+            echo "Opening in editor..."
+            sleep 1
+
+            if command -v nvim > /dev/null; then
+                sudo nvim "$hook_path"
+            elif command -v vim > /dev/null; then
+                sudo vim "$hook_path"
+            elif command -v nano > /dev/null; then
+                sudo nano "$hook_path"
+            else
+                echo "No editor available"
+                sleep 2
+            fi
+            continue
+        fi
+
+        local hook_file
+        local hook_name
+        local is_user_hook=false
+        local is_disabled=false
+
+        if [[ "$selected" == "[USER]"* ]]; then
+            is_user_hook=true
+            if [[ "$selected" == *"[DISABLED]"* ]]; then
+                is_disabled=true
+                hook_name=$(echo "$selected" | sed 's/\[USER\] \[DISABLED\] //')
+            else
+                hook_name=$(echo "$selected" | sed 's/\[USER\] \[ENABLED\] //')
+            fi
+            hook_file="$user_hooks_dir/$hook_name"
+        else
+            hook_name=$(echo "$selected" | sed 's/\[SYSTEM\] //')
+            hook_file="$system_hooks_dir/$hook_name"
+        fi
+
+        clear_screen
+        echo "Hook: $hook_name"
+        echo "Location: $hook_file"
+        echo
+
+        if [ "$is_user_hook" = true ]; then
+            echo "Actions:"
+            echo "1) View hook content"
+            echo "2) Edit hook"
+            echo "3) Delete hook"
+            if [ "$is_disabled" = true ]; then
+                echo "4) Enable hook"
+            else
+                echo "4) Disable hook"
+            fi
+            echo "5) Back"
+
+            local action
+            read -p "Choice [1-5]: " action
+
+            case $action in
+                1)
+                    clear_screen
+                    echo "=== $hook_name ==="
+                    echo
+                    cat "$hook_file"
+                    echo
+                    read -p "Press any key to continue... " -n 1 -s -r
+                    echo
+                    ;;
+                2)
+                    if command -v nvim > /dev/null; then
+                        sudo nvim "$hook_file"
+                    elif command -v vim > /dev/null; then
+                        sudo vim "$hook_file"
+                    elif command -v nano > /dev/null; then
+                        sudo nano "$hook_file"
+                    else
+                        echo "No editor available"
+                        sleep 2
+                    fi
+                    ;;
+                3)
+                    local confirm
+                    read -p "Delete $hook_name? [y/N]: " confirm
+                    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                        sudo rm "$hook_file"
+                        echo "Hook deleted."
+                        sleep 1
+                    else
+                        echo "Cancelled."
+                        sleep 1
+                    fi
+                    ;;
+                4)
+                    if [ "$is_disabled" = true ]; then
+                        local enabled_name="${hook_name%.disabled}"
+                        sudo mv "$hook_file" "$user_hooks_dir/$enabled_name"
+                        echo "Hook enabled: $enabled_name"
+                    else
+                        sudo mv "$hook_file" "${hook_file}.disabled"
+                        echo "Hook disabled: ${hook_name}.disabled"
+                    fi
+                    sleep 1
+                    ;;
+                5|*)
+                    continue
+                    ;;
+            esac
+        else
+            echo "This is a system-provided hook (read-only)."
+            echo
+            echo "Actions:"
+            echo "1) View hook content"
+            echo "2) Copy to user hooks for customization"
+            echo "3) Back"
+
+            local action
+            read -p "Choice [1-3]: " action
+
+            case $action in
+                1)
+                    clear_screen
+                    echo "=== $hook_name ==="
+                    echo
+                    cat "$hook_file"
+                    echo
+                    read -p "Press any key to continue... " -n 1 -s -r
+                    echo
+                    ;;
+                2)
+                    sudo mkdir -p "$user_hooks_dir"
+                    sudo cp "$hook_file" "$user_hooks_dir/"
+                    echo "Copied to: $user_hooks_dir/$hook_name"
+                    echo "You can now edit this copy."
+                    sleep 2
+                    ;;
+                3|*)
+                    continue
+                    ;;
+            esac
+        fi
+    done
+}
+
 display_pacman_conf() {
     echo "Pacman Configuration Summary:"
     echo "-----------------------------"
@@ -2237,14 +2958,18 @@ edit_pacman_conf_directly() {
     echo "Opening pacman.conf for editing..."
     echo
     
-    if command -v nano > /dev/null; then
-        sudo nano /etc/pacman.conf
-    elif command -v micro > /dev/null; then
-        sudo micro /etc/pacman.conf
-    elif command -v vim > /dev/null; then
-        sudo vim /etc/pacman.conf
-    elif command -v vi > /dev/null; then
-        sudo vi /etc/pacman.conf
+	if command -v nvim > /dev/null; then
+		sudo nvim /etc/pacman.conf
+	elif command -v vim > /dev/null; then
+		sudo vim /etc/pacman.conf
+	elif command -v vi > /dev/null; then
+		sudo vi /etc/pacman.conf
+	elif command -v emacs > /dev/null; then
+		sudo emacs /etc/pacman.conf
+	elif command -v nano > /dev/null; then
+		sudo nano /etc/pacman.conf
+	elif command -v micro > /dev/null; then
+		sudo micro /etc/pacman.conf
     else
         echo "No suitable editor found. Please manually edit /etc/pacman.conf."
         read -p "Press any key to continue... " -n 1 -s -r
@@ -2404,6 +3129,8 @@ manager() {
         "Clean Orphans"
         "Clear Package Cache"
         "Dependencies"
+        "Hook Manager"
+        "Pacnew/Pacsave Manager"
         "Pacman Configuration"
         "Exit"
     )
@@ -2484,6 +3211,8 @@ Alt+[ increase preview | Alt+] decrease preview" \
             "Clean Orphans") orphan ;;
             "Clear Package Cache") clear_cache ;;
             "Dependencies") dependencies_menu ;;
+            "Hook Manager") hook_manager ;;
+            "Pacnew/Pacsave Manager") pacnew_pacsave_manager ;;
             "Pacman Configuration") pacman_config_menu ;;
             "Exit") exit_script ;;
         esac
@@ -2522,6 +3251,14 @@ else
             ;;
         -c|cache)
             clear_cache
+            exit 0
+            ;;
+        -p|pacnew)
+            pacnew_pacsave_manager
+            exit 0
+            ;;
+        -H|hooks)
+            hook_manager
             exit 0
             ;;
         -h|--help)
