@@ -3064,7 +3064,42 @@ pacman_config_menu() {
                         echo -e "${bold}Current Value:${normal} $current_val"
                         echo
                         echo -e "${bold}Description:${normal}"
-                        display_preview "$opt" | tail -n +5
+                        case "$opt" in
+                            "RootDir") echo "Set the default root directory for pacman to install to.";;
+                            "DBPath") echo "Overrides the default location of the toplevel database directory.";;
+                            "CacheDir") echo "Overrides the default location of the package cache directory.";;
+                            "LogFile") echo "Overrides the default location of the pacman log file.";;
+                            "GPGDir") echo "Overrides the default location of the directory containing GnuPG configuration files.";;
+                            "HookDir") echo "Add directories to search for alpm hooks.";;
+                            "HoldPkg") echo "Packages that should not be removed unless explicitly requested - space-separated.";;
+                            "IgnorePkg") echo "Packages that should be ignored during upgrades - space-separated.";;
+                            "IgnoreGroup") echo "Groups of packages to ignore during upgrades - space-separated.";;
+                            "Architecture") echo "Defines the system architectures pacman will use for package downloads.";;
+                            "XferCommand") echo "Specifies an external program to handle file downloads.";;
+                            "NoUpgrade") echo "Files that should never be overwritten during package installation or upgrades - space-separated.";;
+                            "NoExtract") echo "Files that should never be extracted from packages - space-separated.";;
+                            "CleanMethod") echo "Specifies how pacman cleans up old packages - KeepInstalled or KeepCurrent.";;
+                            "SigLevel") echo "Sets the default signature verification level.";;
+                            "LocalFileSigLevel") echo "Sets the signature verification level for installing local packages.";;
+                            "RemoteFileSigLevel") echo "Sets the signature verification level for installing remote packages.";;
+                            "ParallelDownloads") echo "Specifies the number of concurrent download streams - recommended: 5.";;
+                            "UseSyslog") echo "Log action messages through syslog.";;
+                            "Color") echo "Automatically enable colors for terminal output.";;
+                            "NoProgressBar") echo "Disables progress bars during downloads.";;
+                            "CheckSpace") echo "Performs a check for adequate available disk space before installing packages.";;
+                            "VerbosePkgLists") echo "Displays name, version, and size of target packages.";;
+                            "DisableDownloadTimeout") echo "Disable defaults for low speed limit and timeout on downloads.";;
+                            "ILoveCandy") echo "Enables a playful pacman-style progress bar.";;
+                            "Add New Repository") echo "Add a custom repository to pacman.conf.";;
+                            "Manage Repositories") echo "Enable or disable multiple repositories at once.";;
+                            "Edit pacman.conf directly") echo "Open pacman.conf in your default text editor.";;
+                            "← Menu") echo "Return to the main SPM menu.";;
+                            *) echo "No description available.";;
+                        esac
+                        echo
+                        echo "Pacman Configuration Summary:"
+                        echo "-----------------------------"
+                        awk "/^\[.*\]/ { print \"\n\" \$0 \":\"; next } /^#/ { next } /^\$/ { next } { gsub(/^[ \t]+|[ \t]+\$/, \"\"); if (\$0 != \"\") print \"  \" \$0 }" /etc/pacman.conf
                     ' \
                     --preview-window="right:${preview_width}%:wrap" \
                     --preview-label=' Configuration Details ' \
@@ -3112,13 +3147,6 @@ Alt+[ increase preview | Alt+] decrease preview" \
         esac
     done
 }
-
-export -f get_recent_updates
-export -f get_recent_installs
-export -f get_recent_removals
-export -f display_preview
-export -f get_option_description
-export -f display_pacman_conf
 
 manager() {
     local options=(
@@ -3173,13 +3201,13 @@ manager() {
                     red=$(tput setaf 1)
                     
                     echo -e "${bold}${green}Recently Updated:${normal}"
-                    get_recent_updates 15
+                    tac /var/log/pacman.log 2>/dev/null | grep "^\[.*\] \[ALPM\] upgraded" | awk "{print \$4}" | sed "s/[()]//g" | awk "!seen[\$0]++" | head -n 15
                     echo
                     echo -e "${bold}${cyan}Recently Installed:${normal}"
-                    get_recent_installs 15
+                    tac /var/log/pacman.log 2>/dev/null | grep "^\[.*\] \[ALPM\] installed" | awk "{print \$4}" | sed "s/[()]//g" | awk "!seen[\$0]++" | head -n 15
                     echo
                     echo -e "${bold}${red}Recently Removed:${normal}"
-                    get_recent_removals 15
+                    tac /var/log/pacman.log 2>/dev/null | grep "^\[.*\] \[ALPM\] removed" | awk "{print \$4}" | sed "s/[()]//g" | awk "!seen[\$0]++" | head -n 15
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
                 --preview-label=' Pacman Log ' \
