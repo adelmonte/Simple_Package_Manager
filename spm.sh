@@ -5,16 +5,20 @@
 
 CLI_MODE=0
 
-UPDATE_CACHE_FILE="/var/cache/spm/update-cache.txt"
-DETAILED_UPDATE_CACHE_FILE="/var/cache/spm/detailed-update-cache.txt"
+# Cache directory and file constants
+SPM_CACHE_DIR="/var/cache/spm"
+UPDATE_CACHE_FILE="$SPM_CACHE_DIR/update-cache.txt"
+DETAILED_UPDATE_CACHE_FILE="$SPM_CACHE_DIR/detailed-update-cache.txt"
+PACKAGE_LIST_CACHE="$SPM_CACHE_DIR/package-list-cache.txt"
+PREVIEW_WIDTH_FILE="$SPM_CACHE_DIR/preview_width"
+RESIZE_FLAG_FILE="$SPM_CACHE_DIR/resize_flag"
 
 ensure_spm_var_dir() {
-    local dir="/var/cache/spm"
-    if [[ ! -d "$dir" ]]; then
-        sudo mkdir -p "$dir"
+    if [[ ! -d "$SPM_CACHE_DIR" ]]; then
+        sudo mkdir -p "$SPM_CACHE_DIR"
     fi
-    if [[ ! -w "$dir" ]]; then
-        sudo chmod 777 "$dir"
+    if [[ ! -w "$SPM_CACHE_DIR" ]]; then
+        sudo chmod 777 "$SPM_CACHE_DIR"
     fi
     for file in "$UPDATE_CACHE_FILE" "$DETAILED_UPDATE_CACHE_FILE"; do
         if [[ -f "$file" && ! -w "$file" ]]; then
@@ -31,7 +35,7 @@ clear_screen() {
 }
 
 get_preview_width() {
-    local preview_file="/var/cache/spm/preview_width"
+    local preview_file="$PREVIEW_WIDTH_FILE"
     if [[ ! -f "$preview_file" ]]; then
         echo "60" > "$preview_file"
     fi
@@ -65,12 +69,12 @@ print_header() {
     local yay_cache=$(get_yay_cache_size)
     local bold=$(tput bold)
     local cyan=$(tput setaf 6)
-    local reset=$(tput sgr0)
+    local normal=$(tput sgr0)
 
     printf " ___ ___ __  __\n"
-    printf "/ __| _ \\  \\/  | ${bold}${cyan}Simple Package Manager${reset}\n"
-    printf "\\__ \\  _/ |\\/| | ${bold}Pacman${reset} %-9s ${bold}Yay${reset} %-9s\n" "$pacman_cache" "$yay_cache"
-    printf "|___/_| |_|  |_| ${bold}Packages${reset} %-7d ${bold}Updates${reset} %-7d\n" "$packages" "$updates"
+    printf "/ __| _ \\  \\/  | ${bold}${cyan}Simple Package Manager${normal}\n"
+    printf "\\__ \\  _/ |\\/| | ${bold}Pacman${normal} %-9s ${bold}Yay${normal} %-9s\n" "$pacman_cache" "$yay_cache"
+    printf "|___/_| |_|  |_| ${bold}Packages${normal} %-7d ${bold}Updates${normal} %-7d\n" "$packages" "$updates"
     echo
 }
 
@@ -122,31 +126,19 @@ show_help() {
     echo
 }
 
-get_recent_installs() {
-    tac /var/log/pacman.log 2>/dev/null | grep '^\[.*\] \[ALPM\] installed' | awk '{print $4}' | sed 's/[()]//g' | awk '!seen[$0]++' | head -n "${1:-15}"
-}
-
-get_recent_updates() {
-    tac /var/log/pacman.log 2>/dev/null | grep '^\[.*\] \[ALPM\] upgraded' | awk '{print $4}' | sed 's/[()]//g' | awk '!seen[$0]++' | head -n "${1:-15}"
-}
-
-get_recent_removals() {
-    tac /var/log/pacman.log 2>/dev/null | grep '^\[.*\] \[ALPM\] removed' | awk '{print $4}' | sed 's/[()]//g' | awk '!seen[$0]++' | head -n "${1:-15}"
-}
-
 update() {
     while true; do
         clear_screen
         
-        if [ -t 0 ]; then
+        if [[ -t 0 ]]; then
             local preview_width=$(get_preview_width)
-            local preview_file="/var/cache/spm/preview_width"
-            local resize_flag="/var/cache/spm/resize_flag"
+            local preview_file="$PREVIEW_WIDTH_FILE"
+            local resize_flag="$RESIZE_FLAG_FILE"
             
             echo 0 > "$resize_flag"
             
             local menu_height
-            if [ -n "$LINES" ]; then
+            if [[ -n "$LINES" ]]; then
                 menu_height=$((LINES - 10))
             else
                 menu_height=15
@@ -158,7 +150,7 @@ update() {
         
         local menu_label
         local header_text
-        if [ $CLI_MODE -eq 1 ]; then
+        if [[ $CLI_MODE -eq 1 ]]; then
             menu_label="← Exit"
             header_text="Enter to confirm | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview"
@@ -172,9 +164,8 @@ Alt+[ increase preview | Alt+] decrease preview"
             "All [Auto]" \
             "All [Review]" \
             "System [Review]" \
-            "Flatpak [Review]" \
             "AUR-devel [Review]" \
-            "$menu_label" | 
+            "$menu_label" |
             fzf --reverse \
                 --layout=reverse-list \
                 --style=full:line \
@@ -193,10 +184,9 @@ Alt+[ increase preview | Alt+] decrease preview"
                     echo
                     echo -e "${bold}Command to execute:${normal}"
                     case {} in
-                        "All [Auto]"*)           echo "yes | yay && flatpak update --assumeyes" ;;
-                        "All [Review]"*)         echo "yay && flatpak update" ;;
+                        "All [Auto]"*)           echo "yes | yay" ;;
+                        "All [Review]"*)         echo "yay" ;;
                         "System [Review]"*)      echo "yay -Syu" ;;
-                        "Flatpak [Review]"*)     echo "flatpak update" ;;
                         "AUR-devel"*)            echo "yay -Sua --devel" ;;
                         *)                       echo "No command to execute" ;;
                     esac
@@ -215,11 +205,11 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --ansi)
 
         if [[ -z "$selected_option" ]]; then
-            if [ -t 0 ] && [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
+            if [[ -t 0 ]] && [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
                 echo 0 > "$resize_flag"
                 continue
             else
-                if [ $CLI_MODE -eq 1 ]; then
+                if [[ $CLI_MODE -eq 1 ]]; then
                     clear
                     echo "Exiting SPM - Simple Package Manager. Goodbye!"
                 fi
@@ -228,7 +218,7 @@ Alt+[ increase preview | Alt+] decrease preview"
         fi
 
         if [[ "$selected_option" == "← Menu" || "$selected_option" == "← Exit" ]]; then
-            if [ $CLI_MODE -eq 1 ]; then
+            if [[ $CLI_MODE -eq 1 ]]; then
                 clear
                 echo "Exiting SPM - Simple Package Manager. Goodbye!"
             fi
@@ -241,29 +231,23 @@ Alt+[ increase preview | Alt+] decrease preview"
             "All [Auto]"*)
                 echo "Performing quick update..."
                 yes | yay
-                flatpak update --assumeyes
                 echo "0" > "$UPDATE_CACHE_FILE"
                 echo "No updates available." > "$DETAILED_UPDATE_CACHE_FILE"
-                rm -f /var/cache/spm/package-list-cache.txt
+                rm -f $PACKAGE_LIST_CACHE
                 ;;
             "All [Review]"*)
                 echo "Performing full update..."
                 yay
-                flatpak update
                 echo "0" > "$UPDATE_CACHE_FILE"
                 echo "No updates available." > "$DETAILED_UPDATE_CACHE_FILE"
-                rm -f /var/cache/spm/package-list-cache.txt
+                rm -f $PACKAGE_LIST_CACHE
                 ;;
             "System [Review]"*)
-                echo "Updating yay packages..."
+                echo "Updating system packages..."
                 yay -Syu
                 echo "0" > "$UPDATE_CACHE_FILE"
                 echo "No updates available." > "$DETAILED_UPDATE_CACHE_FILE"
-                rm -f /var/cache/spm/package-list-cache.txt
-                ;;
-            "Flatpak [Review]"*)
-                echo "Updating Flatpak apps..."
-                flatpak update
+                rm -f $PACKAGE_LIST_CACHE
                 ;;
             "AUR-devel"*)
                 echo "Checking AUR development packages for updates..."
@@ -274,7 +258,7 @@ Alt+[ increase preview | Alt+] decrease preview"
         trap - INT
         
         echo
-        if [ $CLI_MODE -eq 1 ]; then
+        if [[ $CLI_MODE -eq 1 ]]; then
             read -p "Press any key to return to update menu or Ctrl+C to exit... " -n 1 -s -r
             echo
             continue
@@ -292,10 +276,10 @@ install() {
         
         local search_query="$1"
         local preview_width=$(get_preview_width)
-        local preview_file="/var/cache/spm/preview_width"
-        local resize_flag="/var/cache/spm/resize_flag"
-        local cache_file="/var/cache/spm/package-list-cache.txt"
-        local installed_temp="/tmp/spm_installed_$BASHPID.tmp"
+        local preview_file="$PREVIEW_WIDTH_FILE"
+        local resize_flag="$RESIZE_FLAG_FILE"
+        local cache_file="$PACKAGE_LIST_CACHE"
+        local installed_temp="/tmp/spm_installed_$$.tmp"
 
         echo 0 > "$resize_flag"
 
@@ -307,7 +291,7 @@ install() {
             regenerate_cache=true
         fi
 
-        if [ "$regenerate_cache" = true ]; then
+        if [[ "$regenerate_cache" == true ]]; then
             echo "Generating package cache... This may take a moment."
             local repo_order=$(grep '^\[.*\]' /etc/pacman.conf | grep -v '^\[options\]' | sed 's/[][]//g' | tr '\n' ' ')
             pacman -Qq 2>/dev/null > "$installed_temp"
@@ -429,7 +413,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
                     echo 0 > "$resize_flag"
                     continue
                 else
-                    if [ $CLI_MODE -eq 1 ]; then
+                    if [[ $CLI_MODE -eq 1 ]]; then
                         echo
                         echo "Exiting SPM - Simple Package Manager. Goodbye!"
                     fi
@@ -449,7 +433,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
         echo "$selected_packages" | sed "s/^/  ${green}→${normal} /"
         echo
         
-        if [ $CLI_MODE -eq 1 ]; then
+        if [[ $CLI_MODE -eq 1 ]]; then
             trap 'echo; echo "Operation cancelled."; echo; echo "Exiting SPM - Simple Package Manager. Goodbye!"; exit 0' INT
             read -p "${bold}Do you want to proceed? [Y/n]${normal} " confirm
             trap - INT
@@ -459,7 +443,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
                 read -p "${bold}Do you want to proceed? [Y/n]${normal} " confirm
                 echo "$confirm" > /tmp/spm_install_confirm_$$
             )
-            if [ $? -eq 130 ]; then
+            if [[ $? -eq 130 ]]; then
                 echo
                 echo "Operation cancelled. Returning to package selection..."
                 sleep 1
@@ -479,7 +463,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
                 yay -S $selected_packages
                 rm -f "$cache_file"
                 echo
-                if [ $CLI_MODE -eq 1 ]; then
+                if [[ $CLI_MODE -eq 1 ]]; then
                     read -p "Press any key to return to install menu or Ctrl+C to exit... " -n 1 -s -r
                     echo
                     continue
@@ -496,17 +480,17 @@ Alt+[ increase preview | Alt+] decrease preview" \
 remove() {
     while true; do
         clear_screen
-        
+
         local bold=$(tput bold)
+        local cyan=$(tput setaf 6)
+        local yellow=$(tput setaf 3)
+        local red=$(tput setaf 1)
         local normal=$(tput sgr0)
-        
-        echo "${bold}Remove Packages${normal}"
-        echo "---------------"
-        
+
         local search_query="$1"
         local preview_width=$(get_preview_width)
-        local preview_file="/var/cache/spm/preview_width"
-        local resize_flag="/var/cache/spm/resize_flag"
+        local preview_file="$PREVIEW_WIDTH_FILE"
+        local resize_flag="$RESIZE_FLAG_FILE"
 
         echo 0 > "$resize_flag"
 
@@ -551,7 +535,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
                 echo 0 > "$resize_flag"
                 continue
             else
-                if [ $CLI_MODE -eq 1 ]; then
+                if [[ $CLI_MODE -eq 1 ]]; then
                     echo
                     echo "Exiting SPM - Simple Package Manager. Goodbye!"
                 fi
@@ -559,12 +543,6 @@ Alt+[ increase preview | Alt+] decrease preview" \
             fi
         fi
 
-        local bold=$(tput bold)
-        local cyan=$(tput setaf 6)
-        local yellow=$(tput setaf 3)
-        local red=$(tput setaf 1)
-        local normal=$(tput sgr0)
-        
         echo "The following packages will be removed:"
         echo "$selected_packages" | sed 's/^/  → /' | while read line; do
             echo -e "${red}${line}${normal}"
@@ -586,7 +564,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
         echo "  ${bold}7)${normal} Force removal with configs ${yellow}-Rddn${normal} ${red}(dangerous)${normal}"
         echo
         
-        if [ $CLI_MODE -eq 1 ]; then
+        if [[ $CLI_MODE -eq 1 ]]; then
             trap 'echo; echo "Operation cancelled."; echo; echo "Exiting SPM - Simple Package Manager. Goodbye!"; exit 0' INT
             read -p "Enter option 1-7 [1] (Ctrl+C to cancel): " remove_option
             trap - INT
@@ -596,7 +574,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
                 read -p "Enter option 1-7 [1] (Ctrl+C to cancel): " remove_option
                 echo "$remove_option" > /tmp/spm_remove_option_$$
             )
-            if [ $? -eq 130 ]; then
+            if [[ $? -eq 130 ]]; then
                 echo
                 echo "Operation cancelled. Returning to package selection..."
                 sleep 1
@@ -630,9 +608,9 @@ Alt+[ increase preview | Alt+] decrease preview" \
                 ;;
             * ) 
                 yay $pacman_args $selected_packages
-                rm -f /var/cache/spm/package-list-cache.txt
+                rm -f $PACKAGE_LIST_CACHE
                 echo
-                if [ $CLI_MODE -eq 1 ]; then
+                if [[ $CLI_MODE -eq 1 ]]; then
                     read -p "Press any key to return to remove menu or Ctrl+C to exit... " -n 1 -s -r
                     echo
                     continue
@@ -648,14 +626,17 @@ Alt+[ increase preview | Alt+] decrease preview" \
 
 explore_dependencies() {
     while true; do
-        
+        clear_screen
+
         local bold=$(tput bold)
         local cyan=$(tput setaf 6)
+        local green=$(tput setaf 2)
+        local yellow=$(tput setaf 3)
         local normal=$(tput sgr0)
 
         local preview_width=$(get_preview_width)
-        local preview_file="/var/cache/spm/preview_width"
-        local resize_flag="/var/cache/spm/resize_flag"
+        local preview_file="$PREVIEW_WIDTH_FILE"
+        local resize_flag="$RESIZE_FLAG_FILE"
 
         echo 0 > "$resize_flag"
 
@@ -733,8 +714,10 @@ Alt+[ increase preview | Alt+] decrease preview" \
 }
 
 find_high_impact_removals() {
+    clear_screen
+
     local temp_file=$(mktemp)
-    
+
     local bold=$(tput bold)
     local cyan=$(tput setaf 6)
     local green=$(tput setaf 2)
@@ -747,7 +730,7 @@ find_high_impact_removals() {
     
     local packages=($(pacman -Qq))
     echo "Analyzing ${#packages[@]} installed packages..."
-	echo
+    echo
     echo "Press Ctrl+C to cancel."
     echo
     
@@ -759,7 +742,7 @@ find_high_impact_removals() {
         (
             removal_list=$(pacman -Rsp "$pkg" 2>/dev/null)
             
-            if [ -z "$removal_list" ]; then
+            if [[ -z "$removal_list" ]]; then
                 exit 0
             fi
             
@@ -771,7 +754,7 @@ find_high_impact_removals() {
                 fi
             done
             
-            if [ "$conflict" = false ]; then
+            if [[ "$conflict" == false ]]; then
                 removed_count=$(echo "$removal_list" | wc -l)
                 printf "%d %s\n" "$removed_count" "$pkg"
             fi
@@ -789,7 +772,7 @@ find_high_impact_removals() {
     sort -nr "$temp_file" > "${temp_file}.sorted"
     mv "${temp_file}.sorted" "$temp_file"
     
-    if [ ! -s "$temp_file" ]; then
+    if [[ ! -s "$temp_file" ]]; then
         echo "${yellow}No high-impact removal candidates found.${normal}"
         rm "$temp_file"
         read -p "Press any key to return... " -n 1 -s -r
@@ -797,8 +780,8 @@ find_high_impact_removals() {
     fi
 
     local preview_width=$(get_preview_width)
-    local preview_file="/var/cache/spm/preview_width"
-    local resize_flag="/var/cache/spm/resize_flag"
+    local preview_file="$PREVIEW_WIDTH_FILE"
+    local resize_flag="$RESIZE_FLAG_FILE"
 
     echo 0 > "$resize_flag"
 
@@ -835,7 +818,7 @@ find_high_impact_removals() {
                 echo -e "${bold}Dependencies to be removed:${normal}"
                 pacman -Rsp "$pkg" 2>/dev/null | sed "s/^/  /" | head -30
                 removal_count=$(pacman -Rsp "$pkg" 2>/dev/null | wc -l)
-                if [ "$removal_count" -gt 30 ]; then
+                if [[ "$removal_count" -gt 30 ]]; then
                     echo "  ... and $((removal_count - 30)) more"
                 fi
                 echo
@@ -887,14 +870,17 @@ Alt+[ increase preview | Alt+] decrease preview | Enter to view | Ctrl+C to retu
 
 browse_explicit_packages() {
     while true; do
-        
+        clear_screen
+
         local bold=$(tput bold)
         local cyan=$(tput setaf 6)
+        local yellow=$(tput setaf 3)
+        local red=$(tput setaf 1)
         local normal=$(tput sgr0)
 
         local preview_width=$(get_preview_width)
-        local preview_file="/var/cache/spm/preview_width"
-        local resize_flag="/var/cache/spm/resize_flag"
+        local preview_file="$PREVIEW_WIDTH_FILE"
+        local resize_flag="$RESIZE_FLAG_FILE"
 
         echo 0 > "$resize_flag"
 
@@ -938,7 +924,7 @@ browse_explicit_packages() {
                         fi
                     done
                     
-                    if [ "$conflict" = true ]; then
+                    if [[ "$conflict" == true ]]; then
                         echo -e "${red}Would remove other explicit packages${normal}"
                     else
                         echo -e "Would remove ${yellow}$removed_count${normal} total packages"
@@ -946,7 +932,7 @@ browse_explicit_packages() {
                     echo
                     echo -e "${bold}Dependencies to be removed:${normal}"
                     echo "$removal_list" | head -30 | sed "s/^/  /"
-                    if [ "$removed_count" -gt 30 ]; then
+                    if [[ "$removed_count" -gt 30 ]]; then
                         echo "  ... and $((removed_count - 30)) more"
                     fi
                     echo
@@ -974,12 +960,6 @@ Alt+[ increase preview | Alt+] decrease preview" \
             fi
 
             clear_screen
-            local bold=$(tput bold)
-            local cyan=$(tput setaf 6)
-            local yellow=$(tput setaf 3)
-            local red=$(tput setaf 1)
-            local normal=$(tput sgr0)
-            
             echo "${bold}${cyan}Package: $selected_package${normal}"
             echo "Description: $(pacman -Qi "$selected_package" | grep "Description" | cut -d":" -f2-)"
             echo
@@ -998,7 +978,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
                 fi
             done
             
-            if [ "$conflict" = true ]; then
+            if [[ "$conflict" == true ]]; then
                 echo -e "${red}Would remove other explicitly installed packages${normal}"
             else
                 echo -e "Would remove ${yellow}$removed_count${normal} total packages"
@@ -1022,8 +1002,8 @@ dependencies_menu() {
         clear_screen
 
         local preview_width=$(get_preview_width)
-        local preview_file="/var/cache/spm/preview_width"
-        local resize_flag="/var/cache/spm/resize_flag"
+        local preview_file="$PREVIEW_WIDTH_FILE"
+        local resize_flag="$RESIZE_FLAG_FILE"
 
         echo 0 > "$resize_flag"
 
@@ -1149,14 +1129,14 @@ orphan() {
         clear_screen
         
         local preview_width=$(get_preview_width)
-        local preview_file="/var/cache/spm/preview_width"
-        local resize_flag="/var/cache/spm/resize_flag"
+        local preview_file="$PREVIEW_WIDTH_FILE"
+        local resize_flag="$RESIZE_FLAG_FILE"
 
         echo 0 > "$resize_flag"
 
         local menu_label
         local header_text
-        if [ $CLI_MODE -eq 1 ]; then
+        if [[ $CLI_MODE -eq 1 ]]; then
             menu_label="← Exit"
             header_text="Select an option to clean packages - Enter to confirm | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview"
@@ -1222,12 +1202,12 @@ Alt+[ increase preview | Alt+] decrease preview"
                     echo -e "${bold}${yellow}Orphaned Packages:${normal}"
                     echo "Installed as dependencies but no longer required"
                     orphans=$(pacman -Qdtq 2>/dev/null)
-                    if [ -n "$orphans" ]; then
+                    if [[ -n "$orphans" ]]; then
                         orphan_count=$(echo "$orphans" | wc -l)
                         echo "Count: $orphan_count"
                         echo
                         echo "$orphans" | head -20
-                        if [ $orphan_count -gt 20 ]; then
+                        if [[ $orphan_count -gt 20 ]]; then
                             echo "... and $((orphan_count - 20)) more"
                         fi
                     else
@@ -1239,12 +1219,12 @@ Alt+[ increase preview | Alt+] decrease preview"
                     echo -e "${bold}${red}Unneeded Packages:${normal}"
                     echo "Dependencies not required by explicitly installed packages"
                     unneeded=$(pacman -Qqd 2>/dev/null | xargs pacman -Rsu --print 2>/dev/null | grep "^  " | awk "{print \$1}")
-                    if [ -n "$unneeded" ]; then
+                    if [[ -n "$unneeded" ]]; then
                         unneeded_count=$(echo "$unneeded" | wc -l)
                         echo "Count: $unneeded_count"
                         echo
                         echo "$unneeded" | head -20
-                        if [ $unneeded_count -gt 20 ]; then
+                        if [[ $unneeded_count -gt 20 ]]; then
                             echo "... and $((unneeded_count - 20)) more"
                         fi
                     else
@@ -1267,7 +1247,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     echo 0 > "$resize_flag"
                     continue
                 else
-                    if [ $CLI_MODE -eq 1 ]; then
+                    if [[ $CLI_MODE -eq 1 ]]; then
                         clear
                         echo "Exiting SPM - Simple Package Manager. Goodbye!"
                     fi
@@ -1279,7 +1259,7 @@ Alt+[ increase preview | Alt+] decrease preview"
         done
 
         if [[ "$selected_option" == "← Menu" || "$selected_option" == "← Exit" ]]; then
-            if [ $CLI_MODE -eq 1 ]; then
+            if [[ $CLI_MODE -eq 1 ]]; then
                 clear
                 echo "Exiting SPM - Simple Package Manager. Goodbye!"
             fi
@@ -1297,13 +1277,13 @@ Alt+[ increase preview | Alt+] decrease preview"
                 ;;
             "Orphaned Only"*)
                 local orphans=$(pacman -Qdtq 2>/dev/null)
-                if [ -n "$orphans" ]; then
+                if [[ -n "$orphans" ]]; then
                     echo "The following orphaned packages will be removed:"
                     echo "$orphans" | sed 's/^/  → /'
                     echo
                     
                     local confirm
-                    if [ $CLI_MODE -eq 1 ]; then
+                    if [[ $CLI_MODE -eq 1 ]]; then
                         trap 'echo; echo "Operation cancelled."; echo; echo "Exiting SPM - Simple Package Manager. Goodbye!"; exit 0' INT
                         read -p "Do you want to proceed? [Y/n] " confirm
                         trap - INT
@@ -1313,7 +1293,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                             read -p "Do you want to proceed? [Y/n] " confirm
                             echo "$confirm" > /tmp/spm_orphan_confirm_$$
                         )
-                        if [ $? -eq 130 ]; then
+                        if [[ $? -eq 130 ]]; then
                             echo
                             echo "Operation cancelled. Returning to menu..."
                             sleep 1
@@ -1341,13 +1321,13 @@ Alt+[ increase preview | Alt+] decrease preview"
                 ;;
             "Unneeded Only"*)
                 local unneeded=$(pacman -Qqd 2>/dev/null | xargs pacman -Rsu --print 2>/dev/null | grep "^  " | awk '{print $1}')
-                if [ -n "$unneeded" ]; then
+                if [[ -n "$unneeded" ]]; then
                     echo "The following unneeded packages will be removed:"
                     echo "$unneeded" | sed 's/^/  → /'
                     echo
                     
                     local confirm
-                    if [ $CLI_MODE -eq 1 ]; then
+                    if [[ $CLI_MODE -eq 1 ]]; then
                         trap 'echo; echo "Operation cancelled."; echo; echo "Exiting SPM - Simple Package Manager. Goodbye!"; exit 0' INT
                         read -p "Do you want to proceed? [Y/n] " confirm
                         trap - INT
@@ -1357,7 +1337,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                             read -p "Do you want to proceed? [Y/n] " confirm
                             echo "$confirm" > /tmp/spm_orphan_confirm_$$
                         )
-                        if [ $? -eq 130 ]; then
+                        if [[ $? -eq 130 ]]; then
                             echo
                             echo "Operation cancelled. Returning to menu..."
                             sleep 1
@@ -1387,14 +1367,14 @@ Alt+[ increase preview | Alt+] decrease preview"
                 local orphans=$(pacman -Qdtq 2>/dev/null)
                 local unneeded=$(pacman -Qqd 2>/dev/null | xargs pacman -Rsu --print 2>/dev/null | grep "^  " | awk '{print $1}')
                 
-                if [ -n "$orphans" ] || [ -n "$unneeded" ]; then
+                if [[ -n "$orphans" || -n "$unneeded" ]]; then
                     echo "The following packages will be removed:"
-                    if [ -n "$orphans" ]; then
+                    if [[ -n "$orphans" ]]; then
                         echo
                         echo "Orphaned packages:"
                         echo "$orphans" | sed 's/^/  → /'
                     fi
-                    if [ -n "$unneeded" ]; then
+                    if [[ -n "$unneeded" ]]; then
                         echo
                         echo "Unneeded packages:"
                         echo "$unneeded" | sed 's/^/  → /'
@@ -1402,7 +1382,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     echo
                     
                     local confirm
-                    if [ $CLI_MODE -eq 1 ]; then
+                    if [[ $CLI_MODE -eq 1 ]]; then
                         trap 'echo; echo "Operation cancelled."; echo; echo "Exiting SPM - Simple Package Manager. Goodbye!"; exit 0' INT
                         read -p "Do you want to proceed? [Y/n] " confirm
                         trap - INT
@@ -1412,7 +1392,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                             read -p "Do you want to proceed? [Y/n] " confirm
                             echo "$confirm" > /tmp/spm_orphan_confirm_$$
                         )
-                        if [ $? -eq 130 ]; then
+                        if [[ $? -eq 130 ]]; then
                             echo
                             echo "Operation cancelled. Returning to menu..."
                             sleep 1
@@ -1425,8 +1405,8 @@ Alt+[ increase preview | Alt+] decrease preview"
                     
                     if ! $operation_cancelled; then
                         if [[ ! $confirm =~ ^[Nn]o?$ ]]; then
-                            [ -n "$orphans" ] && sudo pacman -Rns $orphans
-                            [ -n "$unneeded" ] && sudo pacman -Rsu $(pacman -Qqd) 2>/dev/null
+                            [[ -n "$orphans" ]] && sudo pacman -Rns $orphans
+                            [[ -n "$unneeded" ]] && sudo pacman -Rsu $(pacman -Qqd) 2>/dev/null
                         else
                             echo "Operation cancelled."
                             sleep 1
@@ -1445,10 +1425,10 @@ Alt+[ increase preview | Alt+] decrease preview"
             continue
         fi
         
-        rm -f /var/cache/spm/package-list-cache.txt
+        rm -f $PACKAGE_LIST_CACHE
         
         echo
-        if [ $CLI_MODE -eq 1 ]; then
+        if [[ $CLI_MODE -eq 1 ]]; then
             read -p "Press any key to return to orphan menu or Ctrl+C to exit... " -n 1 -s -r
             echo
             continue
@@ -1466,12 +1446,12 @@ downgrade() {
         
         local packages="$1"
         local preview_width=$(get_preview_width)
-        local preview_file="/var/cache/spm/preview_width"
-        local resize_flag="/var/cache/spm/resize_flag"
+        local preview_file="$PREVIEW_WIDTH_FILE"
+        local resize_flag="$RESIZE_FLAG_FILE"
         echo 0 > "$resize_flag"
         
         local header_text
-        if [ $CLI_MODE -eq 1 ]; then
+        if [[ $CLI_MODE -eq 1 ]]; then
             header_text="Select package(s) to downgrade - Tab to multi-select | Enter to confirm | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview"
         else
@@ -1479,7 +1459,7 @@ Alt+[ increase preview | Alt+] decrease preview"
 Alt+[ increase preview | Alt+] decrease preview"
         fi
         
-        if [ -z "$packages" ]; then
+        if [[ -z "$packages" ]]; then
             while true; do
                 preview_width=$(cat "$preview_file")
                 
@@ -1515,7 +1495,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                         echo 0 > "$resize_flag"
                         continue
                     else
-                        if [ $CLI_MODE -eq 1 ]; then
+                        if [[ $CLI_MODE -eq 1 ]]; then
                             clear
                             echo "Exiting SPM - Simple Package Manager. Goodbye!"
                         fi
@@ -1557,7 +1537,7 @@ Alt+[ increase preview | Alt+] decrease preview"
             
             cache_versions=($(find /var/cache/pacman/pkg/ -maxdepth 1 -name "${package}-[0-9]*.pkg.tar.*" ! -name "*.sig" 2>/dev/null | sort -V -r))
             
-            if [ ${#cache_versions[@]} -gt 0 ]; then
+            if [[ ${#cache_versions[@]} -gt 0 ]]; then
                 echo "Found ${#cache_versions[@]} cached version(s)"
                 candidates+=("${cache_versions[@]}")
             fi
@@ -1569,7 +1549,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 grep -E "(${arch}|any)\.pkg\.tar\." | \
                 sort -V -r)
             
-            if [ -n "$ala_list" ]; then
+            if [[ -n "$ala_list" ]]; then
                 while IFS= read -r ver; do
                     ala_versions+=("ALA:$ver")
                 done <<< "$ala_list"
@@ -1577,7 +1557,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 candidates+=("${ala_versions[@]}")
             fi
             
-            if [ ${#candidates[@]} -eq 0 ]; then
+            if [[ ${#candidates[@]} -eq 0 ]]; then
                 echo
                 echo "No versions found for $package."
                 echo "This could mean:"
@@ -1599,6 +1579,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 local selected_version=$(printf '%s\n' "${candidates[@]}" | fzf --reverse \
                     --style=full:line \
                     --no-highlight-line \
+                    --scrollbar='█' \
                     --preview-border=rounded \
                     --cycle \
                     --header-border=line \
@@ -1654,7 +1635,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
                 fi
             done
             
-            if [ -n "$selected_version" ]; then
+            if [[ -n "$selected_version" ]]; then
                 echo
                 
                 if [[ "$selected_version" == ALA:* ]]; then
@@ -1663,13 +1644,13 @@ Alt+[ increase preview | Alt+] decrease preview" \
                     
                     echo "Downloading $filename from Arch Linux Archive..."
                     if wget -q --show-progress "https://archive.archlinux.org/packages/${package:0:1}/$package/$filename" -O "$download_path" 2>/dev/null; then
-                        if [ -f "$download_path" ]; then
+                        if [[ -f "$download_path" ]]; then
                             echo
                             sudo pacman -U "$download_path"
                             local install_result=$?
                             rm -f "$download_path"
                             
-                            if [ $install_result -eq 0 ]; then
+                            if [[ $install_result -eq 0 ]]; then
                                 echo
                                 echo "${bold}${green}✓${normal} Downgrade completed for $package."
                             else
@@ -1688,7 +1669,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
                 else
                     sudo pacman -U "$selected_version"
                     
-                    if [ $? -eq 0 ]; then
+                    if [[ $? -eq 0 ]]; then
                         echo
                         echo "${bold}${green}✓${normal} Downgrade completed for $package."
                     else
@@ -1704,10 +1685,10 @@ Alt+[ increase preview | Alt+] decrease preview" \
         
         clear_screen
         echo "All selected packages have been processed."
-        rm -f /var/cache/spm/package-list-cache.txt
+        rm -f $PACKAGE_LIST_CACHE
         
         echo
-        if [ $CLI_MODE -eq 1 ]; then
+        if [[ $CLI_MODE -eq 1 ]]; then
             read -p "Press any key to return to downgrade menu or Ctrl+C to exit... " -n 1 -s -r
             echo
             packages=""
@@ -1725,14 +1706,14 @@ clear_cache() {
         clear_screen
         
         local preview_width=$(get_preview_width)
-        local preview_file="/var/cache/spm/preview_width"
-        local resize_flag="/var/cache/spm/resize_flag"
+        local preview_file="$PREVIEW_WIDTH_FILE"
+        local resize_flag="$RESIZE_FLAG_FILE"
 
         echo 0 > "$resize_flag"
 
         local menu_label
         local header_text
-        if [ $CLI_MODE -eq 1 ]; then
+        if [[ $CLI_MODE -eq 1 ]]; then
             menu_label="← Exit"
             header_text="Select an option to clear cache - Enter to confirm | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview"
@@ -1758,11 +1739,11 @@ Alt+[ increase preview | Alt+] decrease preview"
             
             local selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse \
                 --style=full:line \
-   			    --no-highlight-line \
-				--layout=reverse-list \
-				--cycle \
-				--no-input \
-				--preview-border=rounded \
+                --no-highlight-line \
+                --layout=reverse-list \
+                --cycle \
+                --no-input \
+                --preview-border=rounded \
                 --header-border=line \
                 --border-label=" Clear Package Cache " \
                 --preview '
@@ -1828,7 +1809,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     echo 0 > "$resize_flag"
                     continue
                 else
-                    if [ $CLI_MODE -eq 1 ]; then
+                    if [[ $CLI_MODE -eq 1 ]]; then
                         clear
                         echo "Exiting SPM - Simple Package Manager. Goodbye!"
                     fi
@@ -1840,7 +1821,7 @@ Alt+[ increase preview | Alt+] decrease preview"
         done
 
         if [[ "$selected_option" == "← Menu" || "$selected_option" == "← Exit" ]]; then
-            if [ $CLI_MODE -eq 1 ]; then
+            if [[ $CLI_MODE -eq 1 ]]; then
                 clear
                 echo "Exiting SPM - Simple Package Manager. Goodbye!"
             fi
@@ -1855,7 +1836,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 echo
                 
                 local confirm
-                if [ $CLI_MODE -eq 1 ]; then
+                if [[ $CLI_MODE -eq 1 ]]; then
                     trap 'echo; echo "Operation cancelled."; echo; echo "Exiting SPM - Simple Package Manager. Goodbye!"; exit 0' INT
                     read -p "This will remove ALL cached packages including latest versions. Continue? [y/N] " confirm
                     trap - INT
@@ -1865,7 +1846,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                         read -p "This will remove ALL cached packages including latest versions. Continue? [y/N] " confirm
                         echo "$confirm" > /tmp/spm_cache_confirm_$$
                     )
-                    if [ $? -eq 130 ]; then
+                    if [[ $? -eq 130 ]]; then
                         echo
                         echo "Operation cancelled. Returning to menu..."
                         sleep 1
@@ -1911,7 +1892,7 @@ Alt+[ increase preview | Alt+] decrease preview"
         echo "Operation completed. Remaining pacman cache size: $remaining_cache"
         echo
         
-        if [ $CLI_MODE -eq 1 ]; then
+        if [[ $CLI_MODE -eq 1 ]]; then
             read -p "Press any key to return to cache menu or Ctrl+C to exit... " -n 1 -s -r
             echo
             continue
@@ -1928,14 +1909,14 @@ pacnew_pacsave_manager() {
         clear_screen
 
         local preview_width=$(get_preview_width)
-        local preview_file="/var/cache/spm/preview_width"
-        local resize_flag="/var/cache/spm/resize_flag"
+        local preview_file="$PREVIEW_WIDTH_FILE"
+        local resize_flag="$RESIZE_FLAG_FILE"
 
         echo 0 > "$resize_flag"
 
         local menu_label
         local header_text
-        if [ $CLI_MODE -eq 1 ]; then
+        if [[ $CLI_MODE -eq 1 ]]; then
             menu_label="← Exit"
             header_text="Select a file to manage | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview"
@@ -1950,10 +1931,10 @@ Alt+[ increase preview | Alt+] decrease preview"
 
         local config_files=$(sudo find /etc -type f \( -name "*.pacnew" -o -name "*.pacsave" \) 2>/dev/null | sort)
 
-        if [ -z "$config_files" ]; then
+        if [[ -z "$config_files" ]]; then
             echo "No .pacnew or .pacsave files found!"
             echo
-            if [ $CLI_MODE -eq 1 ]; then
+            if [[ $CLI_MODE -eq 1 ]]; then
                 read -p "Press any key to exit... " -n 1 -s -r
                 echo
                 clear
@@ -1970,12 +1951,12 @@ Alt+[ increase preview | Alt+] decrease preview"
 
         local file_list=""
 
-        if [ "$pacnew_count" -gt 0 ]; then
+        if [[ "$pacnew_count" -gt 0 ]]; then
             file_list="[BULK] Delete All Pacnew ($pacnew_count files)
 [BULK] Apply All Pacnew ($pacnew_count files)"
         fi
-        if [ "$pacsave_count" -gt 0 ]; then
-            if [ -n "$file_list" ]; then
+        if [[ "$pacsave_count" -gt 0 ]]; then
+            if [[ -n "$file_list" ]]; then
                 file_list="$file_list
 [BULK] Delete All Pacsave ($pacsave_count files)"
             else
@@ -1991,7 +1972,7 @@ Alt+[ increase preview | Alt+] decrease preview"
             fi
         done)
 
-        if [ -n "$file_list" ]; then
+        if [[ -n "$file_list" ]]; then
             file_list=$(printf '%s\n%s\n%s' "$file_list" "$individual_files" "$menu_label")
         else
             file_list=$(printf '%s\n%s' "$individual_files" "$menu_label")
@@ -2003,6 +1984,7 @@ Alt+[ increase preview | Alt+] decrease preview"
             local selected=$(echo "$file_list" | fzf --reverse \
                 --style=full:line \
                 --no-highlight-line \
+                --scrollbar='█' \
                 --layout=reverse-list \
                 --cycle \
                 --preview-border=rounded \
@@ -2090,7 +2072,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     echo -e "${bold}=== DIFFERENCES ===${normal}"
                     echo
 
-                    if [ -f "$original" ] && [ -f "$file" ]; then
+                    if [[ -f "$original" && -f "$file" ]]; then
                         if command -v delta > /dev/null; then
                             delta --paging=never --line-numbers "$original" "$file" 2>/dev/null || echo "Cannot show diff"
                         elif command -v git > /dev/null; then
@@ -2098,7 +2080,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                         else
                             diff --color=always -u "$original" "$file" 2>/dev/null || echo "Files are identical or cannot show diff"
                         fi
-                    elif [ ! -f "$original" ]; then
+                    elif [[ ! -f "$original" ]]; then
                         echo "Original file does not exist."
                         echo
                         echo -e "${bold}New file contents:${normal}"
@@ -2121,7 +2103,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     echo 0 > "$resize_flag"
                     continue
                 else
-                    if [ $CLI_MODE -eq 1 ]; then
+                    if [[ $CLI_MODE -eq 1 ]]; then
                         clear
                         echo "Exiting SPM - Simple Package Manager. Goodbye!"
                     fi
@@ -2133,7 +2115,7 @@ Alt+[ increase preview | Alt+] decrease preview"
         done
 
         if [[ "$selected" == "← Menu" || "$selected" == "← Exit" ]]; then
-            if [ $CLI_MODE -eq 1 ]; then
+            if [[ $CLI_MODE -eq 1 ]]; then
                 clear
                 echo "Exiting SPM - Simple Package Manager. Goodbye!"
             fi
@@ -2234,7 +2216,7 @@ Alt+[ increase preview | Alt+] decrease preview"
         echo "=== DIFFERENCES ==="
         echo
 
-        if [ -f "$original" ] && [ -f "$file" ]; then
+        if [[ -f "$original" && -f "$file" ]]; then
             if command -v delta > /dev/null; then
                 delta --paging=always "$original" "$file"
             elif command -v git > /dev/null; then
@@ -2242,7 +2224,7 @@ Alt+[ increase preview | Alt+] decrease preview"
             else
                 diff --color=always -u "$original" "$file" | less -R
             fi
-        elif [ ! -f "$original" ]; then
+        elif [[ ! -f "$original" ]]; then
             echo "Original file does not exist."
             echo
             less "$file"
@@ -2293,7 +2275,7 @@ Alt+[ increase preview | Alt+] decrease preview"
         esac
 
         echo
-        if [ $CLI_MODE -eq 1 ]; then
+        if [[ $CLI_MODE -eq 1 ]]; then
             read -p "Press any key to continue or Ctrl+C to exit... " -n 1 -s -r
             echo
         else
@@ -2311,14 +2293,14 @@ hook_manager() {
         clear_screen
 
         local preview_width=$(get_preview_width)
-        local preview_file="/var/cache/spm/preview_width"
-        local resize_flag="/var/cache/spm/resize_flag"
+        local preview_file="$PREVIEW_WIDTH_FILE"
+        local resize_flag="$RESIZE_FLAG_FILE"
 
         echo 0 > "$resize_flag"
 
         local menu_label
         local header_text
-        if [ $CLI_MODE -eq 1 ]; then
+        if [[ $CLI_MODE -eq 1 ]]; then
             menu_label="← Exit"
             header_text="Select a hook to manage | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview"
@@ -2335,9 +2317,9 @@ Alt+[ increase preview | Alt+] decrease preview"
 
         hook_list="[+] Create New Hook"
 
-        if [ -d "$user_hooks_dir" ]; then
+        if [[ -d "$user_hooks_dir" ]]; then
             local user_hooks=$(find "$user_hooks_dir" -maxdepth 1 -type f \( -name "*.hook" -o -name "*.hook.disabled" \) 2>/dev/null | sort)
-            if [ -n "$user_hooks" ]; then
+            if [[ -n "$user_hooks" ]]; then
                 while IFS= read -r hook; do
                     local name=$(basename "$hook")
                     if [[ "$name" == *.disabled ]]; then
@@ -2349,9 +2331,9 @@ Alt+[ increase preview | Alt+] decrease preview"
             fi
         fi
 
-        if [ -d "$system_hooks_dir" ]; then
+        if [[ -d "$system_hooks_dir" ]]; then
             local system_hooks=$(find "$system_hooks_dir" -maxdepth 1 -type f -name "*.hook" 2>/dev/null | sort)
-            if [ -n "$system_hooks" ]; then
+            if [[ -n "$system_hooks" ]]; then
                 while IFS= read -r hook; do
                     local name=$(basename "$hook")
                     hook_list=$(printf '%s\n%s' "$hook_list" "[SYSTEM] $name")
@@ -2367,6 +2349,7 @@ Alt+[ increase preview | Alt+] decrease preview"
             local selected=$(echo "$hook_list" | fzf --reverse \
                 --style=full:line \
                 --no-highlight-line \
+                --scrollbar='█' \
                 --layout=reverse-list \
                 --cycle \
                 --preview-border=rounded \
@@ -2446,7 +2429,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     echo 0 > "$resize_flag"
                     continue
                 else
-                    if [ $CLI_MODE -eq 1 ]; then
+                    if [[ $CLI_MODE -eq 1 ]]; then
                         clear
                         echo "Exiting SPM - Simple Package Manager. Goodbye!"
                     fi
@@ -2458,7 +2441,7 @@ Alt+[ increase preview | Alt+] decrease preview"
         done
 
         if [[ "$selected" == "← Menu" || "$selected" == "← Exit" ]]; then
-            if [ $CLI_MODE -eq 1 ]; then
+            if [[ $CLI_MODE -eq 1 ]]; then
                 clear
                 echo "Exiting SPM - Simple Package Manager. Goodbye!"
             fi
@@ -2476,7 +2459,7 @@ Alt+[ increase preview | Alt+] decrease preview"
             local hook_name
             read -p "Enter hook name (without .hook extension): " hook_name
 
-            if [ -z "$hook_name" ]; then
+            if [[ -z "$hook_name" ]]; then
                 echo "No name provided. Cancelled."
                 sleep 1
                 continue
@@ -2484,7 +2467,7 @@ Alt+[ increase preview | Alt+] decrease preview"
 
             local hook_path="$user_hooks_dir/${hook_name}.hook"
 
-            if [ -f "$hook_path" ]; then
+            if [[ -f "$hook_path" ]]; then
                 echo "Hook already exists: $hook_path"
                 sleep 2
                 continue
@@ -2545,12 +2528,12 @@ Exec = /bin/true
         echo "Location: $hook_file"
         echo
 
-        if [ "$is_user_hook" = true ]; then
+        if [[ "$is_user_hook" == true ]]; then
             echo "Actions:"
             echo "1) View hook content"
             echo "2) Edit hook"
             echo "3) Delete hook"
-            if [ "$is_disabled" = true ]; then
+            if [[ "$is_disabled" == true ]]; then
                 echo "4) Enable hook"
             else
                 echo "4) Disable hook"
@@ -2595,7 +2578,7 @@ Exec = /bin/true
                     fi
                     ;;
                 4)
-                    if [ "$is_disabled" = true ]; then
+                    if [[ "$is_disabled" == true ]]; then
                         local enabled_name="${hook_name%.disabled}"
                         sudo mv "$hook_file" "$user_hooks_dir/$enabled_name"
                         echo "Hook enabled: $enabled_name"
@@ -2645,20 +2628,6 @@ Exec = /bin/true
     done
 }
 
-display_pacman_conf() {
-    echo "Pacman Configuration Summary:"
-    echo "-----------------------------"
-    awk '
-    /^\[.*\]/ { 
-        print "\n" $0 ":";
-        next 
-    }
-    /^#/ { next }
-    /^$/ { next }
-    { gsub(/^[ \t]+|[ \t]+$/, ""); if ($0 != "") print "  " $0 }
-    ' /etc/pacman.conf
-}
-
 get_option_description() {
     case "$1" in
         "RootDir") echo "Set the default root directory for pacman to install to.";;
@@ -2694,32 +2663,6 @@ get_option_description() {
     esac
 }
 
-display_preview() {
-    local option="$1"
-    local description=$(get_option_description "$option")
-    local current_value
-    
-    if grep -q "^$option" /etc/pacman.conf 2>/dev/null; then
-        current_value=$(grep "^$option" /etc/pacman.conf | sed 's/.*=//; s/^[[:space:]]*//' | tail -n 1)
-        current_value="${current_value:-Enabled - no value}"
-    elif grep -q "^#$option" /etc/pacman.conf 2>/dev/null; then
-        current_value="Disabled - commented out"
-    else
-        current_value="Not set"
-    fi
-    
-    local bold=$(tput bold)
-    local normal=$(tput sgr0)
-    
-    echo -e "${bold}Option: $option${normal}"
-    echo -e "${bold}Current Value:${normal} $current_value"
-    echo
-    echo -e "${bold}Description:${normal}"
-    echo "$description"
-    echo
-    display_pacman_conf
-}
-
 edit_pacman_option() {
     local option="$1"
     local current_value=$(grep "^#*$option" /etc/pacman.conf 2>/dev/null | sed 's/^#*//; s/.*=//; s/^[[:space:]]*//' | tail -n 1)
@@ -2737,7 +2680,7 @@ edit_pacman_option() {
         read -e -i "$current_value" -p "Enter new value or press Enter to keep current: " new_value
         echo "$new_value" > /tmp/spm_pacman_edit_$$
     )
-    if [ $? -eq 130 ]; then
+    if [[ $? -eq 130 ]]; then
         echo
         echo "Operation cancelled."
         rm -f /tmp/spm_pacman_edit_$$
@@ -2747,7 +2690,7 @@ edit_pacman_option() {
     new_value=$(cat /tmp/spm_pacman_edit_$$ 2>/dev/null)
     rm -f /tmp/spm_pacman_edit_$$
 
-    if [ -n "$new_value" ] && [ "$new_value" != "$current_value" ]; then
+    if [[ -n "$new_value" && "$new_value" != "$current_value" ]]; then
         new_value_escaped=$(echo "$new_value" | sed 's/[\/&]/\\&/g')
         
         if grep -q "^#*$option" /etc/pacman.conf; then
@@ -2792,7 +2735,7 @@ toggle_pacman_option_with_confirmation() {
         read -p "Do you want to $new_status $option? [y/N] " confirm
         echo "$confirm" > /tmp/spm_pacman_toggle_$$
     )
-    if [ $? -eq 130 ]; then
+    if [[ $? -eq 130 ]]; then
         echo
         echo "Operation cancelled."
         rm -f /tmp/spm_pacman_toggle_$$
@@ -2803,7 +2746,7 @@ toggle_pacman_option_with_confirmation() {
     rm -f /tmp/spm_pacman_toggle_$$
 
     if [[ $confirm =~ ^[Yy]$ ]]; then
-        if [ "$new_status" = "enable" ]; then
+        if [[ "$new_status" == "enable" ]]; then
             if grep -q "^#$option" /etc/pacman.conf; then
                 sudo sed -i "s/^#$option/$option/" /etc/pacman.conf
             else
@@ -2826,7 +2769,7 @@ toggle_repository() {
     if grep -q "^\[$repo\]" /etc/pacman.conf; then
         echo "Disabling repository: $repo"
         sudo sed -i "/^\[$repo\]/,/^$/s/^\([^#]\)/#\1/g" /etc/pacman.conf
-        if [ $? -eq 0 ]; then
+        if [[ $? -eq 0 ]]; then
             echo "$repo repository disabled successfully."
         else
             echo "Failed to disable $repo repository. Check sudo privileges."
@@ -2834,7 +2777,7 @@ toggle_repository() {
     elif grep -q "^#\[$repo\]" /etc/pacman.conf; then
         echo "Enabling repository: $repo"
         sudo sed -i "/^#\[$repo\]/,/^$/s/^#//g" /etc/pacman.conf
-        if [ $? -eq 0 ]; then
+        if [[ $? -eq 0 ]]; then
             echo "$repo repository enabled successfully."
         else
             echo "Failed to enable $repo repository. Check sudo privileges."
@@ -2865,7 +2808,7 @@ manage_repositories() {
 
     options=${options%$'\n'}
 
-    if [ -z "$options" ]; then
+    if [[ -z "$options" ]]; then
         echo "No repositories found in pacman.conf"
         read -p "Press any key to continue... " -n 1 -s -r
         return
@@ -2873,15 +2816,16 @@ manage_repositories() {
 
     local selected_repos=$(echo -e "$options" | fzf --reverse --multi \
         --style=full:line \
-   	    --no-highlight-line \
-		--preview-border=rounded \
+        --no-highlight-line \
+        --scrollbar='█' \
+        --preview-border=rounded \
         --header-border=line \
         --header="Select repositories to toggle - Tab for multiple, Enter to confirm, Ctrl+C to cancel" \
         --bind 'ctrl-c:abort' \
         --ansi \
         | sed 's/^\[.*\] *//')
 
-    if [ -n "$selected_repos" ]; then
+    if [[ -n "$selected_repos" ]]; then
         echo "$selected_repos" | while read -r repo; do
             toggle_repository "$repo"
         done
@@ -2905,7 +2849,7 @@ add_repository() {
         read -p "Enter the name of the new repository: " repo_name
         echo "$repo_name" > /tmp/spm_repo_name_$$
     )
-    if [ $? -eq 130 ]; then
+    if [[ $? -eq 130 ]]; then
         echo
         echo "Operation cancelled."
         rm -f /tmp/spm_repo_name_$$
@@ -2915,7 +2859,7 @@ add_repository() {
     repo_name=$(cat /tmp/spm_repo_name_$$ 2>/dev/null)
     rm -f /tmp/spm_repo_name_$$
     
-    if [ -z "$repo_name" ]; then
+    if [[ -z "$repo_name" ]]; then
         echo "Repository name cannot be empty."
         read -p "Press any key to continue... " -n 1 -s -r
         return
@@ -2932,7 +2876,7 @@ add_repository() {
         read -p "Enter the server URL for the repository: " server_url
         echo "$server_url" > /tmp/spm_repo_url_$$
     )
-    if [ $? -eq 130 ]; then
+    if [[ $? -eq 130 ]]; then
         echo
         echo "Operation cancelled."
         rm -f /tmp/spm_repo_url_$$
@@ -2942,7 +2886,7 @@ add_repository() {
     server_url=$(cat /tmp/spm_repo_url_$$ 2>/dev/null)
     rm -f /tmp/spm_repo_url_$$
     
-    if [ -z "$server_url" ]; then
+    if [[ -z "$server_url" ]]; then
         echo "Server URL cannot be empty."
         read -p "Press any key to continue... " -n 1 -s -r
         return
@@ -2957,25 +2901,25 @@ add_repository() {
 edit_pacman_conf_directly() {
     echo "Opening pacman.conf for editing..."
     echo
-    
-	if command -v nvim > /dev/null; then
-		sudo nvim /etc/pacman.conf
-	elif command -v vim > /dev/null; then
-		sudo vim /etc/pacman.conf
-	elif command -v vi > /dev/null; then
-		sudo vi /etc/pacman.conf
-	elif command -v emacs > /dev/null; then
-		sudo emacs /etc/pacman.conf
-	elif command -v nano > /dev/null; then
-		sudo nano /etc/pacman.conf
-	elif command -v micro > /dev/null; then
-		sudo micro /etc/pacman.conf
+
+    if command -v nvim > /dev/null; then
+        sudo nvim /etc/pacman.conf
+    elif command -v vim > /dev/null; then
+        sudo vim /etc/pacman.conf
+    elif command -v vi > /dev/null; then
+        sudo vi /etc/pacman.conf
+    elif command -v emacs > /dev/null; then
+        sudo emacs /etc/pacman.conf
+    elif command -v nano > /dev/null; then
+        sudo nano /etc/pacman.conf
+    elif command -v micro > /dev/null; then
+        sudo micro /etc/pacman.conf
     else
         echo "No suitable editor found. Please manually edit /etc/pacman.conf."
         read -p "Press any key to continue... " -n 1 -s -r
         return 1
     fi
-    
+
     echo "Editing complete."
 }
 
@@ -3018,21 +2962,21 @@ pacman_config_menu() {
         local header_height=8
         local menu_height=$(($(tput lines) - $header_height - 1))
         local preview_width=$(get_preview_width)
-        local preview_file="/var/cache/spm/preview_width"
-        local resize_flag="/var/cache/spm/resize_flag"
+        local preview_file="$PREVIEW_WIDTH_FILE"
+        local resize_flag="$RESIZE_FLAG_FILE"
 
         echo 0 > "$resize_flag"
 
         while true; do
             preview_width=$(cat "$preview_file")
             
-            local selected_option=$(printf '%s\n' "${options[@]}" | 
+            local selected_option=$(printf '%s\n' "${options[@]}" |
                 fzf --reverse \
-					--layout=reverse-list \
-					--cycle \
+                    --layout=reverse-list \
+                    --cycle \
                     --style=full:line \
-   			        --no-highlight-line \
-					--preview-border=rounded \
+                    --no-highlight-line \
+                    --preview-border=rounded \
                     --border-label=" Pacman Configuration " \
                     --header-border=line \
                     --preview '
@@ -3166,8 +3110,8 @@ manager() {
     local menu_height=$(($(tput lines) - $header_height - 1))
     local preview_width
     local selected_option
-    local preview_file="/var/cache/spm/preview_width"
-    local resize_flag="/var/cache/spm/resize_flag"
+    local preview_file="$PREVIEW_WIDTH_FILE"
+    local resize_flag="$RESIZE_FLAG_FILE"
 
     exit_script() {
         clear
@@ -3186,11 +3130,11 @@ manager() {
             
             selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse \
                 --style=full:line \
-   			    --no-highlight-line \
-				--layout=reverse-list \
-				--cycle \
-				--no-input \
-				--preview-border=rounded \
+                --no-highlight-line \
+                --layout=reverse-list \
+                --cycle \
+                --no-input \
+                --preview-border=rounded \
                 --header-border=line \
                 --border-label=" SPM Main Menu " \
                 --preview '
@@ -3250,7 +3194,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
 [ ! -f "$UPDATE_CACHE_FILE" ] && echo "0" > "$UPDATE_CACHE_FILE"
 [ ! -f "$DETAILED_UPDATE_CACHE_FILE" ] && echo "No updates available." > "$DETAILED_UPDATE_CACHE_FILE"
 
-if [ $# -eq 0 ]; then
+if [[ $# -eq 0 ]]; then
     manager
 else
     CLI_MODE=1
