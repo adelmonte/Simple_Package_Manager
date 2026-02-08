@@ -3,6 +3,9 @@
 # SPM - Simple Package Manager
 # Dependencies: fzf (0.58.0+), yay
 
+# Force fzf to use bash for preview commands (fixes fish/zsh compatibility)
+export SHELL=/bin/bash
+
 CLI_MODE=0
 
 # Cache directory and file constants
