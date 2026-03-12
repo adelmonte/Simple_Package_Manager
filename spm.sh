@@ -67,6 +67,7 @@ get_yay_cache_size() {
 
 print_header() {
     local packages=$(pacman -Q | wc -l)
+    local explicit=$(pacman -Qe | wc -l)
     local updates=$(cat "$UPDATE_CACHE_FILE" 2>/dev/null || echo "0")
     local pacman_cache=$(get_pacman_cache_size)
     local yay_cache=$(get_yay_cache_size)
@@ -77,7 +78,7 @@ print_header() {
     printf " ___ ___ __  __\n"
     printf "/ __| _ \\  \\/  | ${bold}${cyan}Simple Package Manager${normal}\n"
     printf "\\__ \\  _/ |\\/| | ${bold}Pacman${normal} %-9s ${bold}Yay${normal} %-9s\n" "$pacman_cache" "$yay_cache"
-    printf "|___/_| |_|  |_| ${bold}Packages${normal} %-7d ${bold}Updates${normal} %-7d\n" "$packages" "$updates"
+    printf "|___/_| |_|  |_| ${bold}Packages${normal} %-5d ${bold}Explicit${normal} %-5d ${bold}Updates${normal} %-5d\n" "$packages" "$explicit" "$updates"
     echo
 }
 
