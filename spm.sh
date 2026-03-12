@@ -87,8 +87,8 @@ show_help() {
 
     local bold=$(tput bold)
     local cyan=$(tput setaf 6)
-    local yellow=$(tput setaf 3)
     local green=$(tput setaf 2)
+    local yellow=$(tput setaf 3)
     local normal=$(tput sgr0)
 
     echo "${bold}${cyan}SPM - Simple Package Manager${normal}"
@@ -98,12 +98,12 @@ show_help() {
     echo "  spm [option] [arguments]"
     echo
     echo "${bold}OPTIONS:${normal}"
-    echo "  ${green}-u${normal}, ${green}update${normal}        Update packages (interactive menu)"
+    echo "  ${green}-u${normal}, ${green}update${normal}        Update packages"
     echo "  ${green}-i${normal}, ${green}install${normal}       Install packages"
     echo "  ${green}-r${normal}, ${green}remove${normal}        Remove packages"
-    echo "  ${green}-o${normal}, ${green}orphan${normal}        Clean orphaned packages (interactive menu)"
+    echo "  ${green}-o${normal}, ${green}orphan${normal}        Clean orphaned packages"
     echo "  ${green}-d${normal}, ${green}downgrade${normal}     Downgrade packages"
-    echo "  ${green}-c${normal}, ${green}cache${normal}         Clear package cache (interactive menu)"
+    echo "  ${green}-c${normal}, ${green}cache${normal}         Clear package cache"
     echo "  ${green}-p${normal}, ${green}pacnew${normal}        Manage .pacnew and .pacsave files"
     echo "  ${green}-H${normal}, ${green}hooks${normal}         Manage ALPM hooks"
     echo "  ${green}-h${normal}, ${green}--help${normal}        Display this help message"
@@ -123,7 +123,7 @@ show_help() {
     echo
     echo "${bold}CONFIGURATION:${normal}"
     echo "  Cache location:     /var/cache/spm/"
-    echo "  Pacman config:      /etc/pacman.conf"
+    echo "  pacman config:      /etc/pacman.conf"
     echo
     echo "For more information, visit:"
     echo "${cyan}https://github.com/adelmonte/Simple_Package_Manager${normal}"
@@ -181,8 +181,8 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --border-label=" Update Packages " \
                 --preview '
                     bold=$(tput bold)
-                    normal=$(tput sgr0)
                     cyan=$(tput setaf 6)
+                    normal=$(tput sgr0)
 
                     echo -e "${bold}${cyan}Update Information${normal}"
                     echo
@@ -380,10 +380,10 @@ install() {
                 --border-label=" Install Packages " \
                 --preview "
                     bold=\$(tput bold)
-                    normal=\$(tput sgr0)
                     cyan=\$(tput setaf 6)
                     green=\$(tput setaf 2)
                     yellow=\$(tput setaf 3)
+                    normal=\$(tput sgr0)
 
                     pkg_name=\$(echo {} | awk '{print \$1}')
 
@@ -403,7 +403,7 @@ install() {
                     fi
                 " \
                 --preview-window="right:$preview_width%:wrap" \
-                --header="Select package(s) to install - Tab to multi-select | Enter to confirm | Ctrl+C to return
+                --header="Select package(s) to install | Tab to multi-select | Enter to confirm | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
                 --bind 'ctrl-c:abort' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
@@ -430,8 +430,8 @@ Alt+[ increase preview | Alt+] decrease preview" \
         done
 
         local bold=$(tput bold)
-        local green=$(tput setaf 2)
         local cyan=$(tput setaf 6)
+        local green=$(tput setaf 2)
         local normal=$(tput sgr0)
 
         echo "${bold}${cyan}The following packages will be installed:${normal}"
@@ -509,14 +509,14 @@ remove() {
             --border-label=" Remove Packages " \
             --preview '
                 bold=$(tput bold)
-                normal=$(tput sgr0)
                 cyan=$(tput setaf 6)
-                red=$(tput setaf 1)
                 yellow=$(tput setaf 3)
+                red=$(tput setaf 1)
+                normal=$(tput sgr0)
 
                 echo -e "${bold}${red}⚠ Package Information: {1}${normal}"
                 echo
-                echo -e "${bold}${cyan}Package Details${normal}"
+                echo -e "${bold}${cyan}Package Information${normal}"
                 yay -Qi {1}
                 echo
                 echo -e "${bold}${yellow}Required By:${normal}"
@@ -526,7 +526,7 @@ remove() {
                 pacman -Ql {1} | grep -v "/$" | cut -d" " -f2- | head -100
             ' \
             --preview-window="right:$preview_width%:wrap" \
-            --header="Select package(s) to remove - Tab to multi-select | Enter to confirm | Ctrl+C to return
+            --header="Select package(s) to remove | Tab to multi-select | Enter to confirm | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
             --bind 'ctrl-c:abort' \
             --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
@@ -547,7 +547,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
             fi
         fi
 
-        echo "The following packages will be removed:"
+        echo "${bold}${cyan}The following packages will be removed:${normal}"
         echo "$selected_packages" | sed 's/^/  → /' | while read line; do
             echo -e "${red}${line}${normal}"
         done
@@ -658,10 +658,10 @@ explore_dependencies() {
                 --border-label=" Explore Dependencies " \
                 --preview '
                     bold=$(tput bold)
-                    normal=$(tput sgr0)
                     cyan=$(tput setaf 6)
                     green=$(tput setaf 2)
                     yellow=$(tput setaf 3)
+                    normal=$(tput sgr0)
 
                     echo -e "${bold}${cyan}Package: {1}${normal}"
                     echo
@@ -710,7 +710,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
             echo "This package depends on:"
             pacman -Qi $selected_package | grep "Depends On" | cut -d":" -f2- | tr " " "\n" | sed "s/^/  /"
             echo
-            read -p "Press any key to continue exploring or Ctrl+C to return. " -n 1 -s -r
+            read -p "Press any key to continue exploring or Ctrl+C to return... " -n 1 -s -r
             break
         done
     done
@@ -801,10 +801,10 @@ find_high_impact_removals() {
             --border-label=" High-Impact Removals " \
             --preview '
                 bold=$(tput bold)
-                normal=$(tput sgr0)
                 cyan=$(tput setaf 6)
-                yellow=$(tput setaf 3)
                 green=$(tput setaf 2)
+                yellow=$(tput setaf 3)
+                normal=$(tput sgr0)
 
                 pkg=$(echo {} | awk "{print \$2}")
                 count=$(echo {} | awk "{print \$1}")
@@ -829,8 +829,8 @@ find_high_impact_removals() {
                 pacman -Qi "$pkg" 2>/dev/null | grep -E "Install Date|Installed Size" | sed "s/^/  /"
             ' \
             --preview-window="right:${preview_width}%:wrap" \
-            --header="High-impact removal candidates - sorted by dependency count
-Alt+[ increase preview | Alt+] decrease preview | Enter to view | Ctrl+C to return" \
+            --header="High-impact removal candidates | Enter to view details | Ctrl+C to return
+Alt+[ increase preview | Alt+] decrease preview" \
             --bind 'ctrl-c:abort' \
             --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
             --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
@@ -898,10 +898,10 @@ browse_explicit_packages() {
                 --border-label=" Explicitly Installed Packages " \
                 --preview '
                     bold=$(tput bold)
-                    normal=$(tput sgr0)
                     cyan=$(tput setaf 6)
                     yellow=$(tput setaf 3)
                     red=$(tput setaf 1)
+                    normal=$(tput sgr0)
 
                     pkg={1}
 
@@ -990,7 +990,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
             echo "${bold}Install Information:${normal}"
             pacman -Qi "$selected_package" | grep -E "Install Reason|Install Date|Installed Size" | sed 's/^/  /'
             echo
-            read -p "Press any key to continue or Ctrl+C to return. " -n 1 -s -r
+            read -p "Press any key to continue or Ctrl+C to return... " -n 1 -s -r
             break
         done
     done
@@ -1033,13 +1033,13 @@ dependencies_menu() {
                 --no-input \
                 --preview-border=line \
                 --header-border=line \
-                --border-label=" Dependencies Menu " \
+                --border-label=" Dependencies " \
                 --preview '
                     bold=$(tput bold)
-                    normal=$(tput sgr0)
                     cyan=$(tput setaf 6)
+                    normal=$(tput sgr0)
 
-                    echo -e "${bold}${cyan}Function Information${normal}"
+                    echo -e "${bold}${cyan}Option Information${normal}"
                     echo
                     case {} in
                         "Explore Dependencies")
@@ -1091,8 +1091,7 @@ dependencies_menu() {
                     esac
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
-                --header="Dependencies Menu - Select a function
-Enter to confirm | Ctrl+C to return
+                --header="Select an option | Enter to select | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
                 --bind 'ctrl-c:abort' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
@@ -1152,11 +1151,11 @@ orphan() {
         local header_text
         if [[ $CLI_MODE -eq 1 ]]; then
             menu_label="← Exit"
-            header_text="Select an option to clean packages - Enter to confirm | Ctrl+C to exit
+            header_text="Select an option | Enter to confirm | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview"
         else
             menu_label="← Menu"
-            header_text="Select an option to clean packages - Enter to confirm | Ctrl+C to return
+            header_text="Select an option | Enter to confirm | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview"
         fi
 
@@ -1185,10 +1184,10 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --header-border=line \
                 --preview '
                     bold=$(tput bold)
-                    normal=$(tput sgr0)
                     cyan=$(tput setaf 6)
                     yellow=$(tput setaf 3)
                     red=$(tput setaf 1)
+                    normal=$(tput sgr0)
 
                     echo -e "${bold}${cyan}Clean Orphans Information${normal}"
                     echo
@@ -1281,6 +1280,10 @@ Alt+[ increase preview | Alt+] decrease preview"
 
         local operation_cancelled=false
 
+        local bold=$(tput bold)
+        local cyan=$(tput setaf 6)
+        local normal=$(tput sgr0)
+
         case "$selected_option" in
             "All Orphans [Auto]"*)
                 echo "Performing quick removal..."
@@ -1291,7 +1294,7 @@ Alt+[ increase preview | Alt+] decrease preview"
             "Orphaned Only"*)
                 local orphans=$(pacman -Qdtq 2>/dev/null)
                 if [[ -n "$orphans" ]]; then
-                    echo "The following orphaned packages will be removed:"
+                    echo "${bold}${cyan}The following orphaned packages will be removed:${normal}"
                     echo "$orphans" | sed 's/^/  → /'
                     echo
 
@@ -1335,7 +1338,7 @@ Alt+[ increase preview | Alt+] decrease preview"
             "Unneeded Only"*)
                 local unneeded=$(pacman -Qqd 2>/dev/null | xargs pacman -Rsu --print 2>/dev/null | grep "^  " | awk '{print $1}')
                 if [[ -n "$unneeded" ]]; then
-                    echo "The following unneeded packages will be removed:"
+                    echo "${bold}${cyan}The following unneeded packages will be removed:${normal}"
                     echo "$unneeded" | sed 's/^/  → /'
                     echo
 
@@ -1381,7 +1384,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 local unneeded=$(pacman -Qqd 2>/dev/null | xargs pacman -Rsu --print 2>/dev/null | grep "^  " | awk '{print $1}')
 
                 if [[ -n "$orphans" || -n "$unneeded" ]]; then
-                    echo "The following packages will be removed:"
+                    echo "${bold}${cyan}The following packages will be removed:${normal}"
                     if [[ -n "$orphans" ]]; then
                         echo
                         echo "Orphaned packages:"
@@ -1465,10 +1468,10 @@ downgrade() {
 
         local header_text
         if [[ $CLI_MODE -eq 1 ]]; then
-            header_text="Select package(s) to downgrade - Tab to multi-select | Enter to confirm | Ctrl+C to exit
+            header_text="Select package(s) to downgrade | Tab to multi-select | Enter to confirm | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview"
         else
-            header_text="Select package(s) to downgrade - Tab to multi-select | Enter to confirm | Ctrl+C to return
+            header_text="Select package(s) to downgrade | Tab to multi-select | Enter to confirm | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview"
         fi
 
@@ -1486,9 +1489,9 @@ Alt+[ increase preview | Alt+] decrease preview"
                     --border-label=" Downgrade Packages " \
                     --preview '
                         bold=$(tput bold)
-                        normal=$(tput sgr0)
                         cyan=$(tput setaf 6)
                         yellow=$(tput setaf 3)
+                        normal=$(tput sgr0)
 
                         echo -e "${bold}${yellow}⬇ Downgrade: {}${normal}"
                         echo
@@ -1523,9 +1526,9 @@ Alt+[ increase preview | Alt+] decrease preview"
             clear_screen
 
             local bold=$(tput bold)
-            local yellow=$(tput setaf 3)
             local cyan=$(tput setaf 6)
             local green=$(tput setaf 2)
+            local yellow=$(tput setaf 3)
             local normal=$(tput sgr0)
 
             echo "${bold}${yellow}⬇ Downgrading: $package${normal}"
@@ -1577,7 +1580,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 echo "  • No cached versions exist locally"
                 echo "  • Network connectivity issues"
                 echo
-                read -p "Press any key to continue..." -n 1 -s -r
+                read -p "Press any key to continue... " -n 1 -s -r
                 continue
             fi
 
@@ -1598,10 +1601,10 @@ Alt+[ increase preview | Alt+] decrease preview"
                     --border-label=" Select Version for $package " \
                     --preview "
                         bold=\$(tput bold)
-                        normal=\$(tput sgr0)
                         cyan=\$(tput setaf 6)
-                        yellow=\$(tput setaf 3)
                         green=\$(tput setaf 2)
+                        yellow=\$(tput setaf 3)
+                        normal=\$(tput sgr0)
 
                         echo -e \"\${bold}\${yellow}⬇ Downgrading: $package\${normal}\"
                         echo
@@ -1620,12 +1623,12 @@ Alt+[ increase preview | Alt+] decrease preview"
                             echo -e \"\${bold}Source:\${normal} Local cache\"
                             echo -e \"\${bold}Location:\${normal} \$version\"
                             echo
-                            echo -e \"\${bold}Package Details:\${normal}\"
+                            echo -e \"\${bold}Package Information:\${normal}\"
                             pacman -Qip \"\$version\" 2>/dev/null || echo 'Details not available'
                         fi
                     " \
                     --preview-window="right:$preview_width%:wrap" \
-                    --header="Select a version to downgrade $package - Enter to confirm | Ctrl+C to skip
+                    --header="Select a version to downgrade $package | Enter to confirm | Ctrl+C to skip
 Alt+[ increase preview | Alt+] decrease preview" \
                     --bind 'ctrl-c:abort' \
                     --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
@@ -1690,7 +1693,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
                 fi
 
                 echo
-                read -p "Press any key to continue..." -n 1 -s -r
+                read -p "Press any key to continue... " -n 1 -s -r
             fi
         done
 
@@ -1726,11 +1729,11 @@ clear_cache() {
         local header_text
         if [[ $CLI_MODE -eq 1 ]]; then
             menu_label="← Exit"
-            header_text="Select an option to clear cache - Enter to confirm | Ctrl+C to exit
+            header_text="Select an option | Enter to confirm | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview"
         else
             menu_label="← Menu"
-            header_text="Select an option to clear cache - Enter to confirm | Ctrl+C to return
+            header_text="Select an option | Enter to confirm | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview"
         fi
 
@@ -1759,11 +1762,11 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --border-label=" Clear Package Cache " \
                 --preview '
                     bold=$(tput bold)
-                    normal=$(tput sgr0)
                     cyan=$(tput setaf 6)
                     yellow=$(tput setaf 3)
+                    normal=$(tput sgr0)
 
-                    echo -e "${bold}${cyan}Cache Clear Information${normal}"
+                    echo -e "${bold}${cyan}Clear Cache Information${normal}"
                     echo
                     echo -e "${bold}Command to execute:${normal}"
                     case {} in
@@ -1788,7 +1791,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     echo
                     echo -e "${bold}${yellow}Current Cache Sizes:${normal}"
                     pacman_cache=$(du -sh /var/cache/pacman/pkg 2>/dev/null | cut -f1)
-                    echo "Pacman cache: $pacman_cache"
+                    echo "pacman cache: $pacman_cache"
                     yay_pkg_size=$(find ~/.cache/yay -name "*.pkg.tar.*" -type f 2>/dev/null | xargs du -ch 2>/dev/null | tail -1 | cut -f1)
                     if [[ -n "$yay_pkg_size" && "$yay_pkg_size" != "0" ]]; then
                         echo "AUR package cache: $yay_pkg_size"
@@ -1884,7 +1887,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 yay -Sc --noconfirm
                 ;;
             "Pacman Cache"*)
-                echo "Clearing Pacman cache..."
+                echo "Clearing pacman cache..."
                 sudo pacman -Sc
                 ;;
             "AUR Cache"*)
@@ -1928,11 +1931,11 @@ pacnew_pacsave_manager() {
         local header_text
         if [[ $CLI_MODE -eq 1 ]]; then
             menu_label="← Exit"
-            header_text="Select a file to manage | Ctrl+C to exit
+            header_text="Select a file to manage | Enter to select | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview"
         else
             menu_label="← Menu"
-            header_text="Select a file to manage | Ctrl+C to return
+            header_text="Select a file to manage | Enter to select | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview"
         fi
 
@@ -1942,7 +1945,7 @@ Alt+[ increase preview | Alt+] decrease preview"
         local config_files=$(sudo find /etc -type f \( -name "*.pacnew" -o -name "*.pacsave" \) 2>/dev/null | sort)
 
         if [[ -z "$config_files" ]]; then
-            echo "No .pacnew or .pacsave files found!"
+            echo "No .pacnew or .pacsave files found."
             echo
             if [[ $CLI_MODE -eq 1 ]]; then
                 read -p "Press any key to exit... " -n 1 -s -r
@@ -2002,10 +2005,10 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --border-label=" Pacnew/Pacsave Manager " \
                 --preview '
                     bold=$(tput bold)
-                    normal=$(tput sgr0)
                     cyan=$(tput setaf 6)
-                    yellow=$(tput setaf 3)
                     green=$(tput setaf 2)
+                    yellow=$(tput setaf 3)
+                    normal=$(tput sgr0)
 
                     selection="{}"
 
@@ -2149,7 +2152,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 echo
                 echo "All .pacnew files deleted."
             else
-                echo "Cancelled."
+                echo "Operation cancelled."
             fi
             sleep 2
             continue
@@ -2176,7 +2179,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 echo
                 echo "All .pacnew files applied."
             else
-                echo "Cancelled."
+                echo "Operation cancelled."
             fi
             sleep 2
             continue
@@ -2200,7 +2203,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 echo
                 echo "All .pacsave files deleted."
             else
-                echo "Cancelled."
+                echo "Operation cancelled."
             fi
             sleep 2
             continue
@@ -2320,7 +2323,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 elif command -v vim > /dev/null; then
                     sudo vimdiff "$original" "$file"
                 else
-                    echo "No diff editor available (nvim or vim required)"
+                    echo "No diff editor available (nvim or vim required)."
                     sleep 2
                 fi
                 if [[ -f "$file" ]]; then
@@ -2329,7 +2332,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 fi
                 ;;
             4|*)
-                echo "Skipped"
+                echo "Skipped."
                 ;;
         esac
 
@@ -2361,11 +2364,11 @@ hook_manager() {
         local header_text
         if [[ $CLI_MODE -eq 1 ]]; then
             menu_label="← Exit"
-            header_text="Select a hook to manage | Ctrl+C to exit
+            header_text="Select a hook to manage | Enter to select | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview"
         else
             menu_label="← Menu"
-            header_text="Select a hook to manage | Ctrl+C to return
+            header_text="Select a hook to manage | Enter to select | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview"
         fi
 
@@ -2413,13 +2416,13 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --cycle \
                 --preview-border=line \
                 --header-border=line \
-                --border-label=" ALPM Hook Manager " \
+                --border-label=" Hook Manager " \
                 --preview '
                     bold=$(tput bold)
-                    normal=$(tput sgr0)
                     cyan=$(tput setaf 6)
-                    yellow=$(tput setaf 3)
                     green=$(tput setaf 2)
+                    yellow=$(tput setaf 3)
+                    normal=$(tput sgr0)
 
                     case {} in
                         "← Menu"|"← Exit")
@@ -2556,7 +2559,7 @@ Exec = /bin/true
             elif command -v nano > /dev/null; then
                 sudo nano "$hook_path"
             else
-                echo "No editor available"
+                echo "No editor available."
                 sleep 2
             fi
             continue
@@ -2619,7 +2622,7 @@ Exec = /bin/true
                     elif command -v nano > /dev/null; then
                         sudo nano "$hook_file"
                     else
-                        echo "No editor available"
+                        echo "No editor available."
                         sleep 2
                     fi
                     ;;
@@ -2631,7 +2634,7 @@ Exec = /bin/true
                         echo "Hook deleted."
                         sleep 1
                     else
-                        echo "Cancelled."
+                        echo "Operation cancelled."
                         sleep 1
                     fi
                     ;;
@@ -2878,7 +2881,7 @@ manage_repositories() {
         --scrollbar='█' \
         --preview-border=line \
         --header-border=line \
-        --header="Select repositories to toggle - Tab for multiple, Enter to confirm, Ctrl+C to cancel" \
+        --header="Select repositories to toggle | Tab to multi-select | Enter to confirm | Ctrl+C to return" \
         --bind 'ctrl-c:abort' \
         --ansi \
         | sed 's/^\[.*\] *//')
@@ -3047,10 +3050,10 @@ pacman_config_menu() {
                     --header-border=line \
                     --preview '
                         bold=$(tput bold)
-                        normal=$(tput sgr0)
                         cyan=$(tput setaf 6)
                         green=$(tput setaf 2)
                         yellow=$(tput setaf 3)
+                        normal=$(tput sgr0)
 
                         opt=$(echo {} | sed "s/^\[[^]]*\] //")
 
@@ -3081,7 +3084,7 @@ pacman_config_menu() {
                         awk "/^\[.*\]/ { print \"\n\" \$0 \":\"; next } /^#/ { next } /^\$/ { next } { gsub(/^[ \t]+|[ \t]+\$/, \"\"); if (\$0 != \"\") print \"  \" \$0 }" /etc/pacman.conf
                     ' \
                     --preview-window="right:${preview_width}%:wrap" \
-                    --header="Pacman Configuration Menu - Enter to select | Ctrl+C to return
+                    --header="Select a configuration option | Enter to select | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
                     --bind 'ctrl-c:abort' \
                     --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
@@ -3182,10 +3185,10 @@ manager() {
                 --border-label=" SPM Main Menu " \
                 --preview '
                     bold=$(tput bold)
-                    normal=$(tput sgr0)
                     cyan=$(tput setaf 6)
                     green=$(tput setaf 2)
                     red=$(tput setaf 1)
+                    normal=$(tput sgr0)
 
                     echo -e "${bold}${green}Recently Updated:${normal}"
                     tac /var/log/pacman.log 2>/dev/null | grep "^\[.*\] \[ALPM\] upgraded" | awk "{print \$4}" | sed "s/[()]//g" | awk "!seen[\$0]++" | head -n 15
@@ -3281,7 +3284,7 @@ else
             exit 0
             ;;
         *)
-            echo "Invalid option: $1"
+            echo "Invalid option: $1."
             echo "Use -h or --help for usage information."
             exit 1
             ;;
