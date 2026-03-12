@@ -1967,8 +1967,8 @@ Alt+[ increase preview | Alt+] decrease preview"
             return
         fi
 
-        local pacnew_count=$(echo "$config_files" | grep -c '\.pacnew$' || echo 0)
-        local pacsave_count=$(echo "$config_files" | grep -c '\.pacsave$' || echo 0)
+        local pacnew_count=$(echo "$config_files" | grep -c '\.pacnew$' || true)
+        local pacsave_count=$(echo "$config_files" | grep -c '\.pacsave$' || true)
 
         local file_list=""
 
@@ -2231,10 +2231,35 @@ Alt+[ increase preview | Alt+] decrease preview"
         fi
 
         clear_screen
-        echo "File: $original"
-        echo "Type: .$file_type"
+
+        local bold=$(tput bold)
+        local cyan=$(tput setaf 6)
+        local yellow=$(tput setaf 3)
+        local green=$(tput setaf 2)
+        local red=$(tput setaf 1)
+        local normal=$(tput sgr0)
+
+        if [[ "$file_type" == "pacnew" ]]; then
+            echo "${bold}${cyan}Pacnew File: $original${normal}"
+            echo
+            echo "A package update provided a new default version of this config file."
+            echo "Your current config was left untouched, and the new default was saved as:"
+            echo "  ${yellow}$file${normal}"
+            echo
+            echo "${bold}YOUR config:${normal}     $original"
+            echo "${bold}PACKAGE config:${normal}  $file"
+        else
+            echo "${bold}${cyan}Pacsave File: $original${normal}"
+            echo
+            echo "A package was removed and your custom config was backed up as:"
+            echo "  ${yellow}$file${normal}"
+            echo
+            echo "${bold}CURRENT file:${normal}  $original"
+            echo "${bold}YOUR backup:${normal}   $file"
+        fi
+
         echo
-        echo "=== DIFFERENCES ==="
+        echo "${bold}=== DIFFERENCES ===${normal}"
         echo
 
         if [[ -f "$original" && -f "$file" ]]; then
@@ -2252,16 +2277,34 @@ Alt+[ increase preview | Alt+] decrease preview"
         fi
 
         echo
-        echo "What do you want to do?"
         if [[ "$file_type" == "pacnew" ]]; then
-            echo "1) Keep current config (delete .pacnew)"
-            echo "2) Use new config (replace current with .pacnew)"
+            echo "${bold}What do you want to do?${normal}"
+            echo
+            echo "  ${bold}${green}1) Keep YOUR config${normal}  - Discard the new package default"
+            echo "     Deletes ${file##*/}, no changes to your config"
+            echo
+            echo "  ${bold}${yellow}2) Use PACKAGE config${normal}  - Replace your config with the new default"
+            echo "     Overwrites $original with the package version"
+            echo
+            echo "  ${bold}${cyan}3) Merge manually${normal}  - Open both files side-by-side in a diff editor"
+            echo "     Lets you pick and choose changes from each file"
+            echo
+            echo "  ${bold}4) Skip${normal}  - Do nothing for now"
         else
-            echo "1) Keep current config (delete .pacsave backup)"
-            echo "2) Restore backup (replace current with .pacsave)"
+            echo "${bold}What do you want to do?${normal}"
+            echo
+            echo "  ${bold}${green}1) Keep current file${normal}  - Delete the old backup"
+            echo "     Deletes ${file##*/}"
+            echo
+            echo "  ${bold}${yellow}2) Restore YOUR backup${normal}  - Replace current file with your saved config"
+            echo "     Overwrites $original with your backup"
+            echo
+            echo "  ${bold}${cyan}3) Merge manually${normal}  - Open both files side-by-side in a diff editor"
+            echo "     Lets you pick and choose changes from each file"
+            echo
+            echo "  ${bold}4) Skip${normal}  - Do nothing for now"
         fi
-        echo "3) Edit manually with diff editor"
-        echo "4) Skip"
+        echo
 
         local choice
         read -p "Choice [1-4]: " choice
@@ -2269,14 +2312,18 @@ Alt+[ increase preview | Alt+] decrease preview"
         case $choice in
             1)
                 sudo rm "$file"
-                echo "Kept current config, deleted .$file_type"
+                if [[ "$file_type" == "pacnew" ]]; then
+                    echo "${green}Kept your config.${normal} Deleted ${file##*/}"
+                else
+                    echo "${green}Kept current file.${normal} Deleted backup ${file##*/}"
+                fi
                 ;;
             2)
                 sudo mv "$file" "$original"
                 if [[ "$file_type" == "pacnew" ]]; then
-                    echo "Replaced with new version"
+                    echo "${yellow}Replaced your config with the package default.${normal}"
                 else
-                    echo "Restored backup"
+                    echo "${yellow}Restored your backup to $original${normal}"
                 fi
                 ;;
             3)
@@ -2288,7 +2335,10 @@ Alt+[ increase preview | Alt+] decrease preview"
                     echo "No diff editor available (nvim or vim required)"
                     sleep 2
                 fi
-                echo "After editing, you may want to delete .$file_type manually if satisfied"
+                if [[ -f "$file" ]]; then
+                    echo
+                    echo "The .$file_type file still exists. You can clean it up next time or select this file again."
+                fi
                 ;;
             4|*)
                 echo "Skipped"
