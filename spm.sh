@@ -200,7 +200,6 @@ Alt+[ increase preview | Alt+] decrease preview"
                     cat "'$DETAILED_UPDATE_CACHE_FILE'" 2>/dev/null || echo "No update information available."
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
-                --preview-label=' Update Information ' \
                 --header="$header_text" \
                 --bind 'ctrl-c:abort' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
@@ -404,7 +403,6 @@ install() {
                     fi
                 " \
                 --preview-window="right:$preview_width%:wrap" \
-                --preview-label=' Package Information ' \
                 --header="Select package(s) to install - Tab to multi-select | Enter to confirm | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
                 --bind 'ctrl-c:abort' \
@@ -528,7 +526,6 @@ remove() {
                 pacman -Ql {1} | grep -v "/$" | cut -d" " -f2- | head -100
             ' \
             --preview-window="right:$preview_width%:wrap" \
-            --preview-label=' Package Information ' \
             --header="Select package(s) to remove - Tab to multi-select | Enter to confirm | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
             --bind 'ctrl-c:abort' \
@@ -685,7 +682,6 @@ explore_dependencies() {
                     pacman -Qi {1} | grep "Depends On" | cut -d":" -f2- | tr " " "\n" | sed "s/^/  /"
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
-                --preview-label=' Dependency Information ' \
                 --header="Select a dependency package to explore | Enter to view details | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
                 --bind 'ctrl-c:abort' \
@@ -833,7 +829,6 @@ find_high_impact_removals() {
                 pacman -Qi "$pkg" 2>/dev/null | grep -E "Install Date|Installed Size" | sed "s/^/  /"
             ' \
             --preview-window="right:${preview_width}%:wrap" \
-            --preview-label=' Removal Impact ' \
             --header="High-impact removal candidates - sorted by dependency count
 Alt+[ increase preview | Alt+] decrease preview | Enter to view | Ctrl+C to return" \
             --bind 'ctrl-c:abort' \
@@ -947,7 +942,6 @@ browse_explicit_packages() {
                     pacman -Qi "$pkg" 2>/dev/null | grep "Installed Size" | cut -d":" -f2- | sed "s/^/  /"
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
-                --preview-label=' Removal Impact ' \
                 --header="Browse explicitly installed packages | Enter to view details | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
                 --bind 'ctrl-c:abort' \
@@ -1097,7 +1091,6 @@ dependencies_menu() {
                     esac
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
-                --preview-label=' Function Description ' \
                 --header="Dependencies Menu - Select a function
 Enter to confirm | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
@@ -1255,7 +1248,6 @@ Alt+[ increase preview | Alt+] decrease preview"
                     fi
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
-                --preview-label=' Orphaned and Unneeded Packages ' \
                 --header="$header_text" \
                 --bind 'ctrl-c:abort' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
@@ -1504,7 +1496,6 @@ Alt+[ increase preview | Alt+] decrease preview"
                         pacman -Qi {} 2>/dev/null || echo "Package not found"
                     ' \
                     --preview-window="right:$preview_width%:wrap" \
-                    --preview-label=' Current Package Version ' \
                     --header="$header_text" \
                     --bind 'ctrl-c:abort' \
                     --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
@@ -1634,7 +1625,6 @@ Alt+[ increase preview | Alt+] decrease preview"
                         fi
                     " \
                     --preview-window="right:$preview_width%:wrap" \
-                    --preview-label=" Version for $package " \
                     --header="Select a version to downgrade $package - Enter to confirm | Ctrl+C to skip
 Alt+[ increase preview | Alt+] decrease preview" \
                     --bind 'ctrl-c:abort' \
@@ -1817,7 +1807,6 @@ Alt+[ increase preview | Alt+] decrease preview"
                     df -h / | awk "NR==2 {print \"Available: \" \$4}"
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
-                --preview-label=' Cache Information ' \
                 --header="$header_text" \
                 --bind 'ctrl-c:abort' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
@@ -2111,7 +2100,6 @@ Alt+[ increase preview | Alt+] decrease preview"
                     fi
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
-                --preview-label=' File Comparison ' \
                 --header="$header_text" \
                 --bind 'ctrl-c:abort' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
@@ -2487,7 +2475,6 @@ Alt+[ increase preview | Alt+] decrease preview"
                     esac
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
-                --preview-label=' Hook Details ' \
                 --header="$header_text" \
                 --bind 'ctrl-c:abort' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
@@ -3094,7 +3081,6 @@ pacman_config_menu() {
                         awk "/^\[.*\]/ { print \"\n\" \$0 \":\"; next } /^#/ { next } /^\$/ { next } { gsub(/^[ \t]+|[ \t]+\$/, \"\"); if (\$0 != \"\") print \"  \" \$0 }" /etc/pacman.conf
                     ' \
                     --preview-window="right:${preview_width}%:wrap" \
-                    --preview-label=' Configuration Details ' \
                     --header="Pacman Configuration Menu - Enter to select | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
                     --bind 'ctrl-c:abort' \
@@ -3211,7 +3197,6 @@ manager() {
                     tac /var/log/pacman.log 2>/dev/null | grep "^\[.*\] \[ALPM\] removed" | awk "{print \$4}" | sed "s/[()]//g" | awk "!seen[\$0]++" | head -n 15
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
-                --preview-label=' Pacman Log ' \
                 --header="Enter to select | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview" \
                 --bind 'ctrl-c:abort' \
