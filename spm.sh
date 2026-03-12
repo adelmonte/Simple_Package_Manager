@@ -176,7 +176,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --no-highlight-line \
                 --cycle \
                 --no-input \
-                --preview-border=rounded \
+                --preview-border=line \
                 --header-border=line \
                 --border-label=" Update Packages " \
                 --preview '
@@ -376,7 +376,7 @@ install() {
                 --no-highlight-line \
                 --cycle \
                 --scrollbar='█' \
-                --preview-border=rounded \
+                --preview-border=line \
                 --header-border=line \
                 --border-label=" Install Packages " \
                 --preview "
@@ -506,7 +506,7 @@ remove() {
             --no-highlight-line \
             --cycle \
             --scrollbar='█' \
-            --preview-border=rounded \
+            --preview-border=line \
             --header-border=line \
             --border-label=" Remove Packages " \
             --preview '
@@ -656,7 +656,7 @@ explore_dependencies() {
                 --no-highlight-line \
                 --cycle \
                 --scrollbar='█' \
-                --preview-border=rounded \
+                --preview-border=line \
                 --header-border=line \
                 --border-label=" Explore Dependencies " \
                 --preview '
@@ -800,7 +800,7 @@ find_high_impact_removals() {
             --no-highlight-line \
             --cycle \
             --scrollbar='█' \
-            --preview-border=rounded \
+            --preview-border=line \
             --header-border=line \
             --border-label=" High-Impact Removals " \
             --preview '
@@ -898,7 +898,7 @@ browse_explicit_packages() {
                 --no-highlight-line \
                 --cycle \
                 --scrollbar='█' \
-                --preview-border=rounded \
+                --preview-border=line \
                 --header-border=line \
                 --border-label=" Explicitly Installed Packages " \
                 --preview '
@@ -1037,7 +1037,7 @@ dependencies_menu() {
                 --layout=reverse-list \
                 --cycle \
                 --no-input \
-                --preview-border=rounded \
+                --preview-border=line \
                 --header-border=line \
                 --border-label=" Dependencies Menu " \
                 --preview '
@@ -1187,7 +1187,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --layout=reverse-list \
                 --cycle \
                 --no-input \
-                --preview-border=rounded \
+                --preview-border=line \
                 --border-label=" Clean Orphans " \
                 --header-border=line \
                 --preview '
@@ -1489,7 +1489,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     --no-highlight-line \
                     --cycle \
                     --scrollbar='█' \
-                    --preview-border=rounded \
+                    --preview-border=line \
                     --header-border=line \
                     --border-label=" Downgrade Packages " \
                     --preview '
@@ -1601,7 +1601,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     --style=full:line \
                     --no-highlight-line \
                     --scrollbar='█' \
-                    --preview-border=rounded \
+                    --preview-border=line \
                     --cycle \
                     --header-border=line \
                     --border-label=" Select Version for $package " \
@@ -1764,7 +1764,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --layout=reverse-list \
                 --cycle \
                 --no-input \
-                --preview-border=rounded \
+                --preview-border=line \
                 --header-border=line \
                 --border-label=" Clear Package Cache " \
                 --preview '
@@ -2008,7 +2008,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --scrollbar='█' \
                 --layout=reverse-list \
                 --cycle \
-                --preview-border=rounded \
+                --preview-border=line \
                 --header-border=line \
                 --border-label=" Pacnew/Pacsave Manager " \
                 --preview '
@@ -2423,7 +2423,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --scrollbar='█' \
                 --layout=reverse-list \
                 --cycle \
-                --preview-border=rounded \
+                --preview-border=line \
                 --header-border=line \
                 --border-label=" ALPM Hook Manager " \
                 --preview '
@@ -2889,7 +2889,7 @@ manage_repositories() {
         --style=full:line \
         --no-highlight-line \
         --scrollbar='█' \
-        --preview-border=rounded \
+        --preview-border=line \
         --header-border=line \
         --header="Select repositories to toggle - Tab for multiple, Enter to confirm, Ctrl+C to cancel" \
         --bind 'ctrl-c:abort' \
@@ -3055,7 +3055,7 @@ pacman_config_menu() {
                     --cycle \
                     --style=full:line \
                     --no-highlight-line \
-                    --preview-border=rounded \
+                    --preview-border=line \
                     --border-label=" Pacman Configuration " \
                     --header-border=line \
                     --preview '
@@ -3191,7 +3191,7 @@ manager() {
                 --layout=reverse-list \
                 --cycle \
                 --no-input \
-                --preview-border=rounded \
+                --preview-border=line \
                 --header-border=line \
                 --border-label=" SPM Main Menu " \
                 --preview '
