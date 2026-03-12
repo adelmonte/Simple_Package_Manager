@@ -237,25 +237,28 @@ Alt+[ increase preview | Alt+] decrease preview"
                 yes | yay
                 echo "0" > "$UPDATE_CACHE_FILE"
                 echo "No updates available." > "$DETAILED_UPDATE_CACHE_FILE"
-                rm -f $PACKAGE_LIST_CACHE
+                rm -f "$PACKAGE_LIST_CACHE"
                 ;;
             "All [Review]"*)
                 echo "Performing full update..."
                 yay
                 echo "0" > "$UPDATE_CACHE_FILE"
                 echo "No updates available." > "$DETAILED_UPDATE_CACHE_FILE"
-                rm -f $PACKAGE_LIST_CACHE
+                rm -f "$PACKAGE_LIST_CACHE"
                 ;;
             "System [Review]"*)
                 echo "Updating system packages..."
                 yay -Syu
                 echo "0" > "$UPDATE_CACHE_FILE"
                 echo "No updates available." > "$DETAILED_UPDATE_CACHE_FILE"
-                rm -f $PACKAGE_LIST_CACHE
+                rm -f "$PACKAGE_LIST_CACHE"
                 ;;
             "AUR-devel"*)
                 echo "Checking AUR development packages for updates..."
                 yay -Sua --devel
+                echo "0" > "$UPDATE_CACHE_FILE"
+                echo "No updates available." > "$DETAILED_UPDATE_CACHE_FILE"
+                rm -f "$PACKAGE_LIST_CACHE"
                 ;;
         esac
 
@@ -612,7 +615,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
                 ;;
             * )
                 yay $pacman_args $selected_packages
-                rm -f $PACKAGE_LIST_CACHE
+                rm -f "$PACKAGE_LIST_CACHE"
                 echo
                 if [[ $CLI_MODE -eq 1 ]]; then
                     read -p "Press any key to return to remove menu or Ctrl+C to exit... " -n 1 -s -r
@@ -868,8 +871,6 @@ Alt+[ increase preview | Alt+] decrease preview | Enter to view | Ctrl+C to retu
         echo
         read -p "Press any key to return to package list... " -n 1 -s -r
     done
-
-    rm "$temp_file"
 }
 
 browse_explicit_packages() {
@@ -1011,11 +1012,18 @@ dependencies_menu() {
 
         echo 0 > "$resize_flag"
 
+        local menu_label
+        if [[ $CLI_MODE -eq 1 ]]; then
+            menu_label="← Exit"
+        else
+            menu_label="← Menu"
+        fi
+
         local options=(
             "Explore Dependencies"
             "High-Impact Removals"
             "Browse Explicit Packages"
-            "← Menu"
+            "$menu_label"
         )
         local header_height=8
         local menu_height=$(($(tput lines) - $header_height - 1))
@@ -1104,12 +1112,24 @@ Alt+[ increase preview | Alt+] decrease preview" \
                     echo 0 > "$resize_flag"
                     continue
                 else
+                    if [[ $CLI_MODE -eq 1 ]]; then
+                        clear
+                        echo "Exiting SPM - Simple Package Manager. Goodbye!"
+                    fi
                     return
                 fi
             fi
 
             break
         done
+
+        if [[ "$selected_option" == "← Menu" || "$selected_option" == "← Exit" ]]; then
+            if [[ $CLI_MODE -eq 1 ]]; then
+                clear
+                echo "Exiting SPM - Simple Package Manager. Goodbye!"
+            fi
+            return
+        fi
 
         case "$selected_option" in
             "Explore Dependencies")
@@ -1120,9 +1140,6 @@ Alt+[ increase preview | Alt+] decrease preview" \
                 ;;
             "Browse Explicit Packages")
                 browse_explicit_packages
-                ;;
-            "← Menu")
-                return
                 ;;
         esac
     done
@@ -1429,7 +1446,7 @@ Alt+[ increase preview | Alt+] decrease preview"
             continue
         fi
 
-        rm -f $PACKAGE_LIST_CACHE
+        rm -f "$PACKAGE_LIST_CACHE"
 
         echo
         if [[ $CLI_MODE -eq 1 ]]; then
@@ -1689,7 +1706,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
 
         clear_screen
         echo "All selected packages have been processed."
-        rm -f $PACKAGE_LIST_CACHE
+        rm -f "$PACKAGE_LIST_CACHE"
 
         echo
         if [[ $CLI_MODE -eq 1 ]]; then
@@ -2662,7 +2679,7 @@ get_option_description() {
         "Add New Repository") echo "Add a custom repository to pacman.conf.";;
         "Manage Repositories") echo "Enable or disable multiple repositories at once.";;
         "Edit pacman.conf directly") echo "Open pacman.conf in your default text editor.";;
-        "← Menu") echo "Return to the main SPM menu.";;
+        "← Menu"|"← Exit") echo "Return to the main SPM menu.";;
         *) echo "No description available.";;
     esac
 }
@@ -2959,8 +2976,15 @@ pacman_config_menu() {
             "[ACTION] Add New Repository"
             "[ACTION] Manage Repositories"
             "[ACTION] Edit pacman.conf directly"
-            "← Menu"
         )
+
+        local menu_label
+        if [[ $CLI_MODE -eq 1 ]]; then
+            menu_label="← Exit"
+        else
+            menu_label="← Menu"
+        fi
+        options+=("$menu_label")
 
         local header_height=8
         local menu_height=$(($(tput lines) - $header_height - 1))
@@ -2969,6 +2993,8 @@ pacman_config_menu() {
         local resize_flag="$RESIZE_FLAG_FILE"
 
         echo 0 > "$resize_flag"
+
+        export -f get_option_description
 
         while true; do
             preview_width=$(cat "$preview_file")
@@ -3011,38 +3037,7 @@ pacman_config_menu() {
                         echo -e "${bold}Current Value:${normal} $current_val"
                         echo
                         echo -e "${bold}Description:${normal}"
-                        case "$opt" in
-                            "RootDir") echo "Set the default root directory for pacman to install to.";;
-                            "DBPath") echo "Overrides the default location of the toplevel database directory.";;
-                            "CacheDir") echo "Overrides the default location of the package cache directory.";;
-                            "LogFile") echo "Overrides the default location of the pacman log file.";;
-                            "GPGDir") echo "Overrides the default location of the directory containing GnuPG configuration files.";;
-                            "HookDir") echo "Add directories to search for alpm hooks.";;
-                            "HoldPkg") echo "Packages that should not be removed unless explicitly requested - space-separated.";;
-                            "IgnorePkg") echo "Packages that should be ignored during upgrades - space-separated.";;
-                            "IgnoreGroup") echo "Groups of packages to ignore during upgrades - space-separated.";;
-                            "Architecture") echo "Defines the system architectures pacman will use for package downloads.";;
-                            "XferCommand") echo "Specifies an external program to handle file downloads.";;
-                            "NoUpgrade") echo "Files that should never be overwritten during package installation or upgrades - space-separated.";;
-                            "NoExtract") echo "Files that should never be extracted from packages - space-separated.";;
-                            "CleanMethod") echo "Specifies how pacman cleans up old packages - KeepInstalled or KeepCurrent.";;
-                            "SigLevel") echo "Sets the default signature verification level.";;
-                            "LocalFileSigLevel") echo "Sets the signature verification level for installing local packages.";;
-                            "RemoteFileSigLevel") echo "Sets the signature verification level for installing remote packages.";;
-                            "ParallelDownloads") echo "Specifies the number of concurrent download streams - recommended: 5.";;
-                            "UseSyslog") echo "Log action messages through syslog.";;
-                            "Color") echo "Automatically enable colors for terminal output.";;
-                            "NoProgressBar") echo "Disables progress bars during downloads.";;
-                            "CheckSpace") echo "Performs a check for adequate available disk space before installing packages.";;
-                            "VerbosePkgLists") echo "Displays name, version, and size of target packages.";;
-                            "DisableDownloadTimeout") echo "Disable defaults for low speed limit and timeout on downloads.";;
-                            "ILoveCandy") echo "Enables a playful pacman-style progress bar.";;
-                            "Add New Repository") echo "Add a custom repository to pacman.conf.";;
-                            "Manage Repositories") echo "Enable or disable multiple repositories at once.";;
-                            "Edit pacman.conf directly") echo "Open pacman.conf in your default text editor.";;
-                            "← Menu") echo "Return to the main SPM menu.";;
-                            *) echo "No description available.";;
-                        esac
+                        get_option_description "$opt"
                         echo
                         echo "Pacman Configuration Summary:"
                         echo "-----------------------------"
@@ -3063,12 +3058,24 @@ Alt+[ increase preview | Alt+] decrease preview" \
                     echo 0 > "$resize_flag"
                     continue
                 else
+                    if [[ $CLI_MODE -eq 1 ]]; then
+                        clear
+                        echo "Exiting SPM - Simple Package Manager. Goodbye!"
+                    fi
                     return
                 fi
             fi
 
             break
         done
+
+        if [[ "$selected_option" == "← Menu" || "$selected_option" == "← Exit" ]]; then
+            if [[ $CLI_MODE -eq 1 ]]; then
+                clear
+                echo "Exiting SPM - Simple Package Manager. Goodbye!"
+            fi
+            return
+        fi
 
         case "$selected_option" in
             "[EDIT] "*)
@@ -3088,9 +3095,6 @@ Alt+[ increase preview | Alt+] decrease preview" \
             "[ACTION] Edit pacman.conf directly")
                 edit_pacman_conf_directly
                 ;;
-            "← Menu")
-                return
-                ;;
         esac
     done
 }
@@ -3100,7 +3104,7 @@ manager() {
         "Install Packages"
         "Remove Packages"
         "Update Packages"
-        "Downgrade Package"
+        "Downgrade Packages"
         "Clean Orphans"
         "Clear Package Cache"
         "Dependencies"
@@ -3182,7 +3186,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
             "Install Packages") install ;;
             "Remove Packages") remove ;;
             "Update Packages") update ;;
-            "Downgrade Package") downgrade ;;
+            "Downgrade Packages") downgrade ;;
             "Clean Orphans") orphan ;;
             "Clear Package Cache") clear_cache ;;
             "Dependencies") dependencies_menu ;;
@@ -3221,7 +3225,8 @@ else
             exit 0
             ;;
         -d|downgrade)
-            downgrade "$2"
+            shift
+            downgrade "$*"
             exit 0
             ;;
         -c|cache)
