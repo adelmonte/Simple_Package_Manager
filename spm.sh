@@ -225,6 +225,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --footer="$footer_text" \
                 --footer-border=line \
                 --bind 'ctrl-c:abort' \
+                --bind 'resize:refresh-preview' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --height=100% \
@@ -429,6 +430,7 @@ install() {
                 --header="Select package(s) to install | Tab to multi-select | Enter to confirm | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
                 --bind 'ctrl-c:abort' \
+                --bind 'resize:refresh-preview' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --tiebreak=index \
@@ -551,6 +553,7 @@ remove() {
             --header="Select package(s) to remove | Tab to multi-select | Enter to confirm | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
             --bind 'ctrl-c:abort' \
+            --bind 'resize:refresh-preview' \
             --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
             --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
             --ansi \
@@ -706,6 +709,7 @@ explore_dependencies() {
                 --header="Select a dependency package to explore | Enter to view details | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
                 --bind 'ctrl-c:abort' \
+                --bind 'resize:refresh-preview' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --ansi)
@@ -852,6 +856,7 @@ find_high_impact_removals() {
             --header="High-impact removal candidates | Enter to view details | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
             --bind 'ctrl-c:abort' \
+            --bind 'resize:refresh-preview' \
             --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
             --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
             --ansi)
@@ -964,6 +969,7 @@ browse_explicit_packages() {
                 --header="Browse explicitly installed packages | Enter to view details | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
                 --bind 'ctrl-c:abort' \
+                --bind 'resize:refresh-preview' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --ansi)
@@ -1116,6 +1122,7 @@ dependencies_menu() {
 Alt+[ increase preview | Alt+] decrease preview" \
                 --footer-border=line \
                 --bind 'ctrl-c:abort' \
+                --bind 'resize:refresh-preview' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --height=100% \
@@ -1272,6 +1279,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --footer="$footer_text" \
                 --footer-border=line \
                 --bind 'ctrl-c:abort' \
+                --bind 'resize:refresh-preview' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --height=100% \
@@ -1524,6 +1532,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     --preview-window="right:$preview_width%:wrap" \
                     --header="$header_text" \
                     --bind 'ctrl-c:abort' \
+                    --bind 'resize:refresh-preview' \
                     --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                     --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                     --ansi)
@@ -1653,6 +1662,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     --header="Select a version to downgrade $package | Enter to confirm | Ctrl+C to skip
 Alt+[ increase preview | Alt+] decrease preview" \
                     --bind 'ctrl-c:abort' \
+                    --bind 'resize:refresh-preview' \
                     --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                     --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                     --ansi)
@@ -1834,6 +1844,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --footer="$footer_text" \
                 --footer-border=line \
                 --bind 'ctrl-c:abort' \
+                --bind 'resize:refresh-preview' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --height=100% \
@@ -2128,6 +2139,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --footer="$footer_text" \
                 --footer-border=line \
                 --bind 'ctrl-c:abort' \
+                --bind 'resize:refresh-preview' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --height=100% \
@@ -2504,6 +2516,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --footer="$footer_text" \
                 --footer-border=line \
                 --bind 'ctrl-c:abort' \
+                --bind 'resize:refresh-preview' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --height=100% \
@@ -2908,6 +2921,7 @@ manage_repositories() {
         --border-label=" Manage Repositories " \
         --header="Select repositories to toggle | Tab to multi-select | Enter to confirm | Ctrl+C to return" \
         --bind 'ctrl-c:abort' \
+        --bind 'resize:refresh-preview' \
         --ansi \
         | sed 's/^\[.*\] *//')
 
@@ -3117,6 +3131,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     --footer="$footer_text" \
                     --footer-border=line \
                     --bind 'ctrl-c:abort' \
+                    --bind 'resize:refresh-preview' \
                     --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                     --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                     --height=100% \
@@ -3241,6 +3256,7 @@ manager() {
 Alt+[ increase preview | Alt+] decrease preview" \
                 --footer-border=line \
                 --bind 'ctrl-c:abort' \
+                --bind 'resize:refresh-preview' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --height=100% \
