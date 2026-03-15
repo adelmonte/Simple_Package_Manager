@@ -61,12 +61,18 @@ get_spm_header() {
     local packages explicit
     if [[ -f "$HEADER_CACHE_FILE" ]]; then
         read -r packages explicit < "$HEADER_CACHE_FILE"
+        if ! [[ "$packages" =~ ^[0-9]+$ && "$explicit" =~ ^[0-9]+$ ]]; then
+            packages=$(pacman -Qq | wc -l)
+            explicit=$(pacman -Qeq | wc -l)
+            echo "$packages $explicit" > "$HEADER_CACHE_FILE"
+        fi
     else
         packages=$(pacman -Qq | wc -l)
         explicit=$(pacman -Qeq | wc -l)
         echo "$packages $explicit" > "$HEADER_CACHE_FILE"
     fi
     local updates=$(cat "$UPDATE_CACHE_FILE" 2>/dev/null || echo "0")
+    [[ "$updates" =~ ^[0-9]+$ ]] || updates="0"
     local pacman_cache=$(get_pacman_cache_size)
     local yay_cache=$(get_yay_cache_size)
 
@@ -321,6 +327,9 @@ install() {
         local regenerate_cache=false
 
         if [[ ! -f "$cache_file" ]]; then
+            regenerate_cache=true
+        elif [[ $(wc -l < "$cache_file") -lt 100 ]] || grep -qP '\x00' "$cache_file" 2>/dev/null; then
+            rm -f "$cache_file"
             regenerate_cache=true
         elif ! systemctl is-enabled spm_updates.timer &>/dev/null; then
             if [[ -n $(find /var/lib/pacman/sync -name '*.db' -newer "$cache_file" 2>/dev/null) ]]; then
