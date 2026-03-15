@@ -37,6 +37,34 @@ clear_screen() {
     print_header
 }
 
+get_footer_color() {
+    local color
+    color=$(echo "$FZF_DEFAULT_OPTS" | grep -oP 'header[^,]*:#?\K[A-Fa-f0-9]{6}' | head -1)
+    if [[ -n "$color" ]]; then
+        echo "#$color"
+    else
+        echo "6"
+    fi
+}
+FZF_FOOTER_COLOR=$(get_footer_color)
+
+get_spm_header() {
+    local packages=$(pacman -Q | wc -l)
+    local explicit=$(pacman -Qe | wc -l)
+    local updates=$(cat "$UPDATE_CACHE_FILE" 2>/dev/null || echo "0")
+    local pacman_cache=$(get_pacman_cache_size)
+    local yay_cache=$(get_yay_cache_size)
+    local bold=$(tput bold)
+    local cyan=$(tput setaf 6)
+    local normal=$(tput sgr0)
+
+    printf " ___ ___ __  __\n"
+    printf "/ __| _ \\  \\/  | ${bold}${cyan}Simple Package Manager${normal}\n"
+    printf "\\__ \\  _/ |\\/| | ${bold}Pacman${normal} %-9s ${bold}Yay${normal} %-9s\n" "$pacman_cache" "$yay_cache"
+    printf "|___/_| |_|  |_| ${bold}Packages${normal} %-5d ${bold}Explicit${normal} %-5d ${bold}Updates${normal} %-5d\n" "$packages" "$explicit" "$updates"
+    printf " \n"
+}
+
 get_preview_width() {
     local preview_file="$PREVIEW_WIDTH_FILE"
     if [[ ! -f "$preview_file" ]]; then
@@ -132,7 +160,7 @@ show_help() {
 
 update() {
     while true; do
-        clear_screen
+        clear
 
         if [[ -t 0 ]]; then
             local preview_width=$(get_preview_width)
@@ -140,27 +168,19 @@ update() {
             local resize_flag="$RESIZE_FLAG_FILE"
 
             echo 0 > "$resize_flag"
-
-            local menu_height
-            if [[ -n "$LINES" ]]; then
-                menu_height=$((LINES - 10))
-            else
-                menu_height=15
-            fi
         else
             local preview_width=50
-            local menu_height=15
         fi
 
         local menu_label
-        local header_text
+        local footer_text
         if [[ $CLI_MODE -eq 1 ]]; then
             menu_label="← Exit"
-            header_text="Enter to confirm | Ctrl+C to exit
+            footer_text="Enter to confirm | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview"
         else
             menu_label="← Menu"
-            header_text="Enter to confirm | Ctrl+C to return
+            footer_text="Enter to confirm | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview"
         fi
 
@@ -171,19 +191,20 @@ Alt+[ increase preview | Alt+] decrease preview"
             "AUR-devel [Review]" \
             "$menu_label" |
             fzf --reverse \
-                --layout=reverse-list \
                 --style=full:line \
                 --no-highlight-line \
                 --cycle \
                 --no-input \
                 --preview-border=line \
                 --header-border=line \
-                --border-label=" Update Packages " \
+                --header-label=" Update Packages " \
+                --header-label-pos=0:bottom \
                 --preview '
                     bold=$(tput bold)
                     cyan=$(tput setaf 6)
                     normal=$(tput sgr0)
 
+                    echo
                     echo -e "${bold}${cyan}Update Information${normal}"
                     echo
                     echo -e "${bold}Command to execute:${normal}"
@@ -200,11 +221,14 @@ Alt+[ increase preview | Alt+] decrease preview"
                     cat "'$DETAILED_UPDATE_CACHE_FILE'" 2>/dev/null || echo "No update information available."
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
-                --header="$header_text" \
+                --header="$(get_spm_header)" \
+                --footer="$footer_text" \
+                --footer-border=line \
                 --bind 'ctrl-c:abort' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --height=$menu_height \
+                --height=100% \
+                --color=header:-1,footer:$FZF_FOOTER_COLOR \
                 --ansi)
 
         if [[ -z "$selected_option" ]]; then
@@ -376,7 +400,6 @@ install() {
                 --cycle \
                 --scrollbar='█' \
                 --preview-border=line \
-                --header-border=line \
                 --border-label=" Install Packages " \
                 --preview "
                     bold=\$(tput bold)
@@ -505,7 +528,6 @@ remove() {
             --cycle \
             --scrollbar='█' \
             --preview-border=line \
-            --header-border=line \
             --border-label=" Remove Packages " \
             --preview '
                 bold=$(tput bold)
@@ -654,7 +676,6 @@ explore_dependencies() {
                 --cycle \
                 --scrollbar='█' \
                 --preview-border=line \
-                --header-border=line \
                 --border-label=" Explore Dependencies " \
                 --preview '
                     bold=$(tput bold)
@@ -797,7 +818,6 @@ find_high_impact_removals() {
             --cycle \
             --scrollbar='█' \
             --preview-border=line \
-            --header-border=line \
             --border-label=" High-Impact Removals " \
             --preview '
                 bold=$(tput bold)
@@ -894,7 +914,6 @@ browse_explicit_packages() {
                 --cycle \
                 --scrollbar='█' \
                 --preview-border=line \
-                --header-border=line \
                 --border-label=" Explicitly Installed Packages " \
                 --preview '
                     bold=$(tput bold)
@@ -998,7 +1017,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
 
 dependencies_menu() {
     while true; do
-        clear_screen
+        clear
 
         local preview_width=$(get_preview_width)
         local preview_file="$PREVIEW_WIDTH_FILE"
@@ -1019,26 +1038,27 @@ dependencies_menu() {
             "Browse Explicit Packages"
             "$menu_label"
         )
-        local header_height=8
-        local menu_height=$(($(tput lines) - $header_height - 1))
-
         while true; do
             preview_width=$(cat "$preview_file")
+
+            local spm_header
+            spm_header=$(get_spm_header)
 
             local selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse \
                 --style=full:line \
                 --no-highlight-line \
-                --layout=reverse-list \
                 --cycle \
                 --no-input \
                 --preview-border=line \
                 --header-border=line \
-                --border-label=" Dependencies " \
+                --header-label=" Dependencies " \
+                --header-label-pos=0:bottom \
                 --preview '
                     bold=$(tput bold)
                     cyan=$(tput setaf 6)
                     normal=$(tput sgr0)
 
+                    echo
                     echo -e "${bold}${cyan}Option Information${normal}"
                     echo
                     case {} in
@@ -1091,12 +1111,15 @@ dependencies_menu() {
                     esac
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
-                --header="Select an option | Enter to select | Ctrl+C to return
+                --header="${spm_header}" \
+                --footer="Select an option | Enter to select | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
+                --footer-border=line \
                 --bind 'ctrl-c:abort' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --height=$menu_height \
+                --height=100% \
+                --color=header:-1,footer:$FZF_FOOTER_COLOR \
                 --ansi)
 
             if [[ -z "$selected_option" ]]; then
@@ -1139,7 +1162,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
 
 orphan() {
     while true; do
-        clear_screen
+        clear
 
         local preview_width=$(get_preview_width)
         local preview_file="$PREVIEW_WIDTH_FILE"
@@ -1148,14 +1171,14 @@ orphan() {
         echo 0 > "$resize_flag"
 
         local menu_label
-        local header_text
+        local footer_text
         if [[ $CLI_MODE -eq 1 ]]; then
             menu_label="← Exit"
-            header_text="Select an option | Enter to confirm | Ctrl+C to exit
+            footer_text="Select an option | Enter to confirm | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview"
         else
             menu_label="← Menu"
-            header_text="Select an option | Enter to confirm | Ctrl+C to return
+            footer_text="Select an option | Enter to confirm | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview"
         fi
 
@@ -1167,20 +1190,17 @@ Alt+[ increase preview | Alt+] decrease preview"
             "$menu_label"
         )
 
-        local header_height=7
-        local menu_height=$(($(tput lines) - $header_height - 1))
-
         while true; do
             preview_width=$(cat "$preview_file")
 
             local selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse \
                 --style=full:line \
                 --no-highlight-line \
-                --layout=reverse-list \
                 --cycle \
                 --no-input \
                 --preview-border=line \
-                --border-label=" Clean Orphans " \
+                --header-label=" Clean Orphans " \
+                --header-label-pos=0:bottom \
                 --header-border=line \
                 --preview '
                     bold=$(tput bold)
@@ -1189,6 +1209,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     red=$(tput setaf 1)
                     normal=$(tput sgr0)
 
+                    echo
                     echo -e "${bold}${cyan}Clean Orphans Information${normal}"
                     echo
                     echo -e "${bold}Command to execute:${normal}"
@@ -1247,11 +1268,14 @@ Alt+[ increase preview | Alt+] decrease preview"
                     fi
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
-                --header="$header_text" \
+                --header="$(get_spm_header)" \
+                --footer="$footer_text" \
+                --footer-border=line \
                 --bind 'ctrl-c:abort' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --height="$menu_height" \
+                --height=100% \
+                --color=header:-1,footer:$FZF_FOOTER_COLOR \
                 --ansi)
 
             if [[ -z "$selected_option" ]]; then
@@ -1485,7 +1509,6 @@ Alt+[ increase preview | Alt+] decrease preview"
                     --cycle \
                     --scrollbar='█' \
                     --preview-border=line \
-                    --header-border=line \
                     --border-label=" Downgrade Packages " \
                     --preview '
                         bold=$(tput bold)
@@ -1597,7 +1620,6 @@ Alt+[ increase preview | Alt+] decrease preview"
                     --scrollbar='█' \
                     --preview-border=line \
                     --cycle \
-                    --header-border=line \
                     --border-label=" Select Version for $package " \
                     --preview "
                         bold=\$(tput bold)
@@ -1717,7 +1739,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
 
 clear_cache() {
     while true; do
-        clear_screen
+        clear
 
         local preview_width=$(get_preview_width)
         local preview_file="$PREVIEW_WIDTH_FILE"
@@ -1726,14 +1748,14 @@ clear_cache() {
         echo 0 > "$resize_flag"
 
         local menu_label
-        local header_text
+        local footer_text
         if [[ $CLI_MODE -eq 1 ]]; then
             menu_label="← Exit"
-            header_text="Select an option | Enter to confirm | Ctrl+C to exit
+            footer_text="Select an option | Enter to confirm | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview"
         else
             menu_label="← Menu"
-            header_text="Select an option | Enter to confirm | Ctrl+C to return
+            footer_text="Select an option | Enter to confirm | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview"
         fi
 
@@ -1745,27 +1767,25 @@ Alt+[ increase preview | Alt+] decrease preview"
             "$menu_label"
         )
 
-        local header_height=7
-        local menu_height=$(($(tput lines) - $header_height - 1))
-
         while true; do
             preview_width=$(cat "$preview_file")
 
             local selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse \
                 --style=full:line \
                 --no-highlight-line \
-                --layout=reverse-list \
                 --cycle \
                 --no-input \
                 --preview-border=line \
                 --header-border=line \
-                --border-label=" Clear Package Cache " \
+                --header-label=" Clear Package Cache " \
+                --header-label-pos=0:bottom \
                 --preview '
                     bold=$(tput bold)
                     cyan=$(tput setaf 6)
                     yellow=$(tput setaf 3)
                     normal=$(tput sgr0)
 
+                    echo
                     echo -e "${bold}${cyan}Clear Cache Information${normal}"
                     echo
                     echo -e "${bold}Command to execute:${normal}"
@@ -1810,11 +1830,14 @@ Alt+[ increase preview | Alt+] decrease preview"
                     df -h / | awk "NR==2 {print \"Available: \" \$4}"
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
-                --header="$header_text" \
+                --header="$(get_spm_header)" \
+                --footer="$footer_text" \
+                --footer-border=line \
                 --bind 'ctrl-c:abort' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --height="$menu_height" \
+                --height=100% \
+                --color=header:-1,footer:$FZF_FOOTER_COLOR \
                 --ansi)
 
             if [[ -z "$selected_option" ]]; then
@@ -1919,7 +1942,7 @@ Alt+[ increase preview | Alt+] decrease preview"
 
 pacnew_pacsave_manager() {
     while true; do
-        clear_screen
+        clear
 
         local preview_width=$(get_preview_width)
         local preview_file="$PREVIEW_WIDTH_FILE"
@@ -1928,19 +1951,16 @@ pacnew_pacsave_manager() {
         echo 0 > "$resize_flag"
 
         local menu_label
-        local header_text
+        local footer_text
         if [[ $CLI_MODE -eq 1 ]]; then
             menu_label="← Exit"
-            header_text="Select a file to manage | Enter to select | Ctrl+C to exit
+            footer_text="Select a file to manage | Enter to select | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview"
         else
             menu_label="← Menu"
-            header_text="Select a file to manage | Enter to select | Ctrl+C to return
+            footer_text="Select a file to manage | Enter to select | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview"
         fi
-
-        local header_height=7
-        local menu_height=$(($(tput lines) - $header_height - 1))
 
         local config_files=$(sudo find /etc -type f \( -name "*.pacnew" -o -name "*.pacsave" \) 2>/dev/null | sort)
 
@@ -1998,11 +2018,11 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --style=full:line \
                 --no-highlight-line \
                 --scrollbar='█' \
-                --layout=reverse-list \
                 --cycle \
                 --preview-border=line \
                 --header-border=line \
-                --border-label=" Pacnew/Pacsave Manager " \
+                --header-label=" Pacnew/Pacsave Manager " \
+                --header-label-pos=0:bottom \
                 --preview '
                     bold=$(tput bold)
                     cyan=$(tput setaf 6)
@@ -2010,6 +2030,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     yellow=$(tput setaf 3)
                     normal=$(tput sgr0)
 
+                    echo
                     selection="{}"
 
                     if [[ "$selection" == "← Menu" || "$selection" == "← Exit" ]]; then
@@ -2103,11 +2124,14 @@ Alt+[ increase preview | Alt+] decrease preview"
                     fi
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
-                --header="$header_text" \
+                --header="$(get_spm_header)" \
+                --footer="$footer_text" \
+                --footer-border=line \
                 --bind 'ctrl-c:abort' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --height=$menu_height \
+                --height=100% \
+                --color=header:-1,footer:$FZF_FOOTER_COLOR \
                 --ansi)
 
             if [[ -z "$selected" ]]; then
@@ -2352,7 +2376,7 @@ hook_manager() {
     local system_hooks_dir="/usr/share/libalpm/hooks"
 
     while true; do
-        clear_screen
+        clear
 
         local preview_width=$(get_preview_width)
         local preview_file="$PREVIEW_WIDTH_FILE"
@@ -2361,19 +2385,16 @@ hook_manager() {
         echo 0 > "$resize_flag"
 
         local menu_label
-        local header_text
+        local footer_text
         if [[ $CLI_MODE -eq 1 ]]; then
             menu_label="← Exit"
-            header_text="Select a hook to manage | Enter to select | Ctrl+C to exit
+            footer_text="Select a hook to manage | Enter to select | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview"
         else
             menu_label="← Menu"
-            header_text="Select a hook to manage | Enter to select | Ctrl+C to return
+            footer_text="Select a hook to manage | Enter to select | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview"
         fi
-
-        local header_height=7
-        local menu_height=$(($(tput lines) - $header_height - 1))
 
         local hook_list=""
 
@@ -2412,11 +2433,11 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --style=full:line \
                 --no-highlight-line \
                 --scrollbar='█' \
-                --layout=reverse-list \
                 --cycle \
                 --preview-border=line \
                 --header-border=line \
-                --border-label=" Hook Manager " \
+                --header-label=" Hook Manager " \
+                --header-label-pos=0:bottom \
                 --preview '
                     bold=$(tput bold)
                     cyan=$(tput setaf 6)
@@ -2424,6 +2445,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     yellow=$(tput setaf 3)
                     normal=$(tput sgr0)
 
+                    echo
                     case {} in
                         "← Menu"|"← Exit")
                             echo -e "${bold}${cyan}Return to Menu${normal}"
@@ -2478,11 +2500,14 @@ Alt+[ increase preview | Alt+] decrease preview"
                     esac
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
-                --header="$header_text" \
+                --header="$(get_spm_header)" \
+                --footer="$footer_text" \
+                --footer-border=line \
                 --bind 'ctrl-c:abort' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --height=$menu_height \
+                --height=100% \
+                --color=header:-1,footer:$FZF_FOOTER_COLOR \
                 --ansi)
 
             if [[ -z "$selected" ]]; then
@@ -2880,7 +2905,7 @@ manage_repositories() {
         --no-highlight-line \
         --scrollbar='█' \
         --preview-border=line \
-        --header-border=line \
+        --border-label=" Manage Repositories " \
         --header="Select repositories to toggle | Tab to multi-select | Enter to confirm | Ctrl+C to return" \
         --bind 'ctrl-c:abort' \
         --ansi \
@@ -2985,7 +3010,7 @@ edit_pacman_conf_directly() {
 
 pacman_config_menu() {
     while true; do
-        clear_screen
+        clear
 
         local options=(
             "[EDIT] RootDir"
@@ -3019,15 +3044,18 @@ pacman_config_menu() {
         )
 
         local menu_label
+        local footer_text
         if [[ $CLI_MODE -eq 1 ]]; then
             menu_label="← Exit"
+            footer_text="Select a configuration option | Enter to select | Ctrl+C to exit
+Alt+[ increase preview | Alt+] decrease preview"
         else
             menu_label="← Menu"
+            footer_text="Select a configuration option | Enter to select | Ctrl+C to return
+Alt+[ increase preview | Alt+] decrease preview"
         fi
         options+=("$menu_label")
 
-        local header_height=8
-        local menu_height=$(($(tput lines) - $header_height - 1))
         local preview_width=$(get_preview_width)
         local preview_file="$PREVIEW_WIDTH_FILE"
         local resize_flag="$RESIZE_FLAG_FILE"
@@ -3041,12 +3069,12 @@ pacman_config_menu() {
 
             local selected_option=$(printf '%s\n' "${options[@]}" |
                 fzf --reverse \
-                    --layout=reverse-list \
                     --cycle \
                     --style=full:line \
                     --no-highlight-line \
                     --preview-border=line \
-                    --border-label=" Pacman Configuration " \
+                    --header-label=" Pacman Configuration " \
+                    --header-label-pos=0:bottom \
                     --header-border=line \
                     --preview '
                         bold=$(tput bold)
@@ -3055,6 +3083,7 @@ pacman_config_menu() {
                         yellow=$(tput setaf 3)
                         normal=$(tput sgr0)
 
+                        echo
                         opt=$(echo {} | sed "s/^\[[^]]*\] //")
 
                         echo -e "${bold}${cyan}Pacman Configuration${normal}"
@@ -3084,12 +3113,14 @@ pacman_config_menu() {
                         awk "/^\[.*\]/ { print \"\n\" \$0 \":\"; next } /^#/ { next } /^\$/ { next } { gsub(/^[ \t]+|[ \t]+\$/, \"\"); if (\$0 != \"\") print \"  \" \$0 }" /etc/pacman.conf
                     ' \
                     --preview-window="right:${preview_width}%:wrap" \
-                    --header="Select a configuration option | Enter to select | Ctrl+C to return
-Alt+[ increase preview | Alt+] decrease preview" \
+                    --header="$(get_spm_header)" \
+                    --footer="$footer_text" \
+                    --footer-border=line \
                     --bind 'ctrl-c:abort' \
                     --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                     --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                    --height=$menu_height \
+                    --height=100% \
+                    --color=header:-1,footer:$FZF_FOOTER_COLOR \
                     --ansi)
 
             if [[ -z "$selected_option" ]]; then
@@ -3152,8 +3183,6 @@ manager() {
         "Pacman Configuration"
         "Exit"
     )
-    local header_height=8
-    local menu_height=$(($(tput lines) - $header_height - 1))
     local preview_width
     local selected_option
     local preview_file="$PREVIEW_WIDTH_FILE"
@@ -3166,7 +3195,7 @@ manager() {
     }
 
     while true; do
-        clear_screen
+        clear
         preview_width=$(get_preview_width)
 
         echo 0 > "$resize_flag"
@@ -3174,15 +3203,18 @@ manager() {
         while true; do
             preview_width=$(cat "$preview_file")
 
+            local spm_header
+            spm_header=$(get_spm_header)
+
             selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse \
                 --style=full:line \
                 --no-highlight-line \
-                --layout=reverse-list \
                 --cycle \
                 --no-input \
                 --preview-border=line \
                 --header-border=line \
-                --border-label=" SPM Main Menu " \
+                --header-label=" SPM Main Menu " \
+                --header-label-pos=0:bottom \
                 --preview '
                     bold=$(tput bold)
                     cyan=$(tput setaf 6)
@@ -3190,22 +3222,29 @@ manager() {
                     red=$(tput setaf 1)
                     normal=$(tput sgr0)
 
+                    n=$(( (FZF_PREVIEW_LINES - 6) / 3 ))
+                    [ "$n" -lt 5 ] && n=5
+
+                    echo
                     echo -e "${bold}${green}Recently Updated:${normal}"
-                    tac /var/log/pacman.log 2>/dev/null | grep "^\[.*\] \[ALPM\] upgraded" | awk "{print \$4}" | sed "s/[()]//g" | awk "!seen[\$0]++" | head -n 15
+                    tac /var/log/pacman.log 2>/dev/null | grep "^\[.*\] \[ALPM\] upgraded" | awk "{print \$4}" | sed "s/[()]//g" | awk "!seen[\$0]++" | head -n $n
                     echo
                     echo -e "${bold}${cyan}Recently Installed:${normal}"
-                    tac /var/log/pacman.log 2>/dev/null | grep "^\[.*\] \[ALPM\] installed" | awk "{print \$4}" | sed "s/[()]//g" | awk "!seen[\$0]++" | head -n 15
+                    tac /var/log/pacman.log 2>/dev/null | grep "^\[.*\] \[ALPM\] installed" | awk "{print \$4}" | sed "s/[()]//g" | awk "!seen[\$0]++" | head -n $n
                     echo
                     echo -e "${bold}${red}Recently Removed:${normal}"
-                    tac /var/log/pacman.log 2>/dev/null | grep "^\[.*\] \[ALPM\] removed" | awk "{print \$4}" | sed "s/[()]//g" | awk "!seen[\$0]++" | head -n 15
+                    tac /var/log/pacman.log 2>/dev/null | grep "^\[.*\] \[ALPM\] removed" | awk "{print \$4}" | sed "s/[()]//g" | awk "!seen[\$0]++" | head -n $n
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
-                --header="Enter to select | Ctrl+C to exit
+                --header="${spm_header}" \
+                --footer="Enter to select | Ctrl+C to exit
 Alt+[ increase preview | Alt+] decrease preview" \
+                --footer-border=line \
                 --bind 'ctrl-c:abort' \
                 --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
                 --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --height=$menu_height \
+                --height=100% \
+                --color=header:-1,footer:$FZF_FOOTER_COLOR \
                 --ansi)
 
             if [[ -z "$selected_option" ]]; then
