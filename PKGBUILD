@@ -10,7 +10,7 @@ provides=('spm')
 conflicts=('spm')
 install=spm.install
 source=("$pkgname-$pkgver.tar.gz::$url/releases/download/v$pkgver/spm-$pkgver.tar.gz")
-sha256sums=('54ce0aacb84dbe480a0d7c6cbf34da4ec7032d9f61d41aec0ba0e297faf8c230')
+sha256sums=('98630c9c4705b1c794767e7b6c2801e4f37bc7d7875a32b7a13897584962e240')
 
 package() {
     cd "$srcdir/Simple_Package_Manager-$pkgver"
