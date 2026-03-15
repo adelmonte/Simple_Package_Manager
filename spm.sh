@@ -3228,6 +3228,110 @@ Alt+[ increase preview | Alt+] decrease preview"
     done
 }
 
+system_tools_menu() {
+    while true; do
+        local preview_width=$(get_preview_width)
+        local preview_file="$PREVIEW_WIDTH_FILE"
+        local resize_flag="$RESIZE_FLAG_FILE"
+
+        echo 0 > "$resize_flag"
+
+        local options=(
+            "Dependencies"
+            "Hook Manager"
+            "Pacnew/Pacsave Manager"
+            "Pacman Configuration"
+            "← Menu"
+        )
+
+        local spm_header
+        spm_header=$(get_spm_header)
+
+        clear
+
+        while true; do
+            preview_width=$(cat "$preview_file")
+
+            local selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse \
+                --style=full:line \
+                --no-highlight-line \
+                --cycle \
+                --no-input \
+                --preview-border=line \
+                --header-border=line \
+                --header-label=" System Tools " \
+                --header-label-pos=0:bottom \
+                --preview "
+                    echo
+                    case {} in
+                        'Dependencies'*)
+                            printf '\033[1m\033[36mDependencies\033[0m\n'
+                            echo
+                            echo '• Explore Dependencies - Dependency tree for any package'
+                            echo '• High-Impact Removals - Packages that free the most space'
+                            echo '• Browse Explicit - Review what you manually installed'
+                            ;;
+                        'Hook Manager'*)
+                            printf '\033[1m\033[36mHook Manager\033[0m\n'
+                            echo
+                            echo '• Create, edit, enable/disable user hooks'
+                            echo '• View system hooks (read-only)'
+                            echo '• Hooks in /etc/pacman.d/hooks/ and /usr/share/libalpm/hooks/'
+                            ;;
+                        'Pacnew/Pacsave Manager'*)
+                            printf '\033[1m\033[36mPacnew/Pacsave Manager\033[0m\n'
+                            echo
+                            echo '• View diffs between current and new config files'
+                            echo '• Apply, delete, or merge individual files'
+                            echo '• Bulk apply or delete all pacnew/pacsave files'
+                            ;;
+                        'Pacman Configuration'*)
+                            printf '\033[1m\033[36mPacman Configuration\033[0m\n'
+                            echo
+                            echo '• Edit options: ParallelDownloads, IgnorePkg, CacheDir, etc.'
+                            echo '• Toggle settings: Color, CheckSpace, ILoveCandy, etc.'
+                            echo '• Add and manage repositories'
+                            ;;
+                        *)
+                            echo 'Return to main menu'
+                            ;;
+                    esac
+                " \
+                --preview-window="right:${preview_width}%:wrap" \
+                --header="${spm_header}" \
+                --footer="Select an option | Enter to confirm | Ctrl+C to return
+Alt+[ increase preview | Alt+] decrease preview" \
+                --footer-border=line \
+                --bind 'ctrl-c:abort' \
+                --bind 'resize:refresh-preview' \
+                --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                --height=100% \
+                --color=header:-1,footer:$FZF_FOOTER_COLOR \
+                --ansi)
+
+            if [[ -z "$selected_option" ]]; then
+                if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
+                    echo 0 > "$resize_flag"
+                    continue
+                else
+                    return
+                fi
+            fi
+
+            break
+        done
+
+        case "$selected_option" in
+            "Dependencies") dependencies_menu ;;
+            "Hook Manager") hook_manager ;;
+            "Pacnew/Pacsave Manager") pacnew_pacsave_manager ;;
+            "Pacman Configuration") pacman_config_menu ;;
+            "← Menu") return ;;
+        esac
+    done
+}
+
 manager() {
     local options=(
         "Install Packages"
@@ -3236,10 +3340,7 @@ manager() {
         "Downgrade Packages"
         "Clean Orphans"
         "Clear Package Cache"
-        "Dependencies"
-        "Hook Manager"
-        "Pacnew/Pacsave Manager"
-        "Pacman Configuration"
+        "System Tools"
         "Exit"
     )
     local preview_width
@@ -3286,23 +3387,17 @@ manager() {
                 --header-label=" SPM Main Menu " \
                 --header-label-pos=0:bottom \
                 --preview "
-                    bold=\$(tput bold)
-                    cyan=\$(tput setaf 6)
-                    green=\$(tput setaf 2)
-                    red=\$(tput setaf 1)
-                    normal=\$(tput sgr0)
-
                     n=\$(( (FZF_PREVIEW_LINES - 6) / 3 ))
                     [ \"\$n\" -lt 5 ] && n=5
 
                     echo
-                    echo -e \"\${bold}\${green}Recently Updated:\${normal}\"
+                    printf '\033[1m\033[32mRecently Updated:\033[0m\n'
                     head -n \$n '$recent_updated'
                     echo
-                    echo -e \"\${bold}\${cyan}Recently Installed:\${normal}\"
+                    printf '\033[1m\033[36mRecently Installed:\033[0m\n'
                     head -n \$n '$recent_installed'
                     echo
-                    echo -e \"\${bold}\${red}Recently Removed:\${normal}\"
+                    printf '\033[1m\033[31mRecently Removed:\033[0m\n'
                     head -n \$n '$recent_removed'
                 " \
                 --preview-window="right:${preview_width}%:wrap" \
@@ -3337,10 +3432,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
             "Downgrade Packages") downgrade ;;
             "Clean Orphans") orphan ;;
             "Clear Package Cache") clear_cache ;;
-            "Dependencies") dependencies_menu ;;
-            "Hook Manager") hook_manager ;;
-            "Pacnew/Pacsave Manager") pacnew_pacsave_manager ;;
-            "Pacman Configuration") pacman_config_menu ;;
+            "System Tools") system_tools_menu ;;
             "Exit") exit_script ;;
         esac
     done
