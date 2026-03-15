@@ -319,7 +319,11 @@ install() {
         if [[ ! -f "$cache_file" ]]; then
             regenerate_cache=true
         elif ! systemctl is-enabled spm_updates.timer &>/dev/null; then
-            regenerate_cache=true
+            if [[ -n $(find /var/lib/pacman/sync -name '*.db' -newer "$cache_file" 2>/dev/null) ]]; then
+                regenerate_cache=true
+            elif [[ -z $(find "$cache_file" -mmin -60 2>/dev/null) ]]; then
+                regenerate_cache=true
+            fi
         fi
 
         if [[ "$regenerate_cache" == true ]]; then
