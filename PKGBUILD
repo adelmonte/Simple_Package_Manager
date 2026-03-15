@@ -1,5 +1,5 @@
 pkgname=spm-arch
-pkgver=2.3
+pkgver=2.5
 pkgrel=1
 pkgdesc="Simple Package Manager - Interactive fzf tui for Arch package management"
 arch=('any')
