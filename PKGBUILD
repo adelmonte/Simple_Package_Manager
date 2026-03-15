@@ -19,4 +19,5 @@ package() {
     install -Dm755 spm_updates.sh "$pkgdir/usr/bin/spm_updates"
     install -Dm644 spm_updates.timer "$pkgdir/usr/lib/systemd/system/spm_updates.timer"
     install -Dm644 spm_updates.service "$pkgdir/usr/lib/systemd/system/spm_updates.service"
+    install -Dm644 spm_header_cache.hook "$pkgdir/usr/share/libalpm/hooks/spm_header_cache.hook"
 }

@@ -1,0 +1,11 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Package
+Target = *
+
+[Action]
+Description = Refresh SPM header cache
+When = PostTransaction
+Exec = /bin/sh -c 'mkdir -p /var/cache/spm && printf "%s %s\n" "$(pacman -Qq | wc -l)" "$(pacman -Qeq | wc -l)" > /var/cache/spm/header-cache.txt && chmod 666 /var/cache/spm/header-cache.txt 2>/dev/null'

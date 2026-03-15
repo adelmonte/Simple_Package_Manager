@@ -58,6 +58,21 @@ spm -H              # Manage ALPM hooks
 spm -p              # Manage pacnew/pacsave files
 ```
 
+## Cache Files and ALPM Hook
+
+SPM uses lightweight cache files in `/var/cache/spm/` to keep the interface responsive. All files are plain text — if any are corrupted or deleted, SPM regenerates them automatically.
+
+| File | Purpose |
+|------|---------|
+| `header-cache.txt` | Total and explicitly installed package counts for the header display |
+| `update-cache.txt` | Number of available updates |
+| `detailed-update-cache.txt` | Full list of available updates with version info |
+| `package-list-cache.txt` | Pre-sorted list of all available packages (repo + AUR) with install status |
+
+**Systemd timer** (`spm_updates.timer`) — Periodically syncs the package database, checks for updates, and regenerates the package list and header caches in the background.
+
+**ALPM hook** (`spm_header_cache.hook`) — A pacman post-transaction hook that fires after any package install, upgrade, or removal. It refreshes the header cache so package counts stay accurate even when packages change outside of SPM.
+
 ## Requirements
 
 - fzf

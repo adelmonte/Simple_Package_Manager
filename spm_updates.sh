@@ -2,6 +2,7 @@
 CACHE_FILE="/var/cache/spm/update-cache.txt"
 DETAILED_CACHE_FILE="/var/cache/spm/detailed-update-cache.txt"
 PACKAGE_LIST_CACHE="/var/cache/spm/package-list-cache.txt"
+HEADER_CACHE_FILE="/var/cache/spm/header-cache.txt"
 
 mkdir -p "$(dirname "$CACHE_FILE")"
 
@@ -50,6 +51,11 @@ BEGIN {
         printf "%01d %03d %s %s|%s|%s\n", installed_priority, priority, package, version, repo, status
     }
 }' | sort -n | cut -d' ' -f3- | column -t -s'|' > "$PACKAGE_LIST_CACHE"
+
+packages=$(pacman -Qq | wc -l)
+explicit=$(pacman -Qeq | wc -l)
+echo "$packages $explicit" > "$HEADER_CACHE_FILE"
+chmod 666 "$HEADER_CACHE_FILE" 2>/dev/null
 
 echo "Updates found: $updates"
 echo "Package list cache updated"

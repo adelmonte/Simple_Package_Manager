@@ -13,6 +13,7 @@ SPM_CACHE_DIR="/var/cache/spm"
 UPDATE_CACHE_FILE="$SPM_CACHE_DIR/update-cache.txt"
 DETAILED_UPDATE_CACHE_FILE="$SPM_CACHE_DIR/detailed-update-cache.txt"
 PACKAGE_LIST_CACHE="$SPM_CACHE_DIR/package-list-cache.txt"
+HEADER_CACHE_FILE="$SPM_CACHE_DIR/header-cache.txt"
 PREVIEW_WIDTH_FILE="$SPM_CACHE_DIR/preview_width"
 RESIZE_FLAG_FILE="$SPM_CACHE_DIR/resize_flag"
 
@@ -48,20 +49,31 @@ get_footer_color() {
 }
 FZF_FOOTER_COLOR=$(get_footer_color)
 
+refresh_header_cache() {
+    local packages
+    local explicit
+    packages=$(pacman -Qq | wc -l)
+    explicit=$(pacman -Qeq | wc -l)
+    echo "$packages $explicit" > "$HEADER_CACHE_FILE"
+}
+
 get_spm_header() {
-    local packages=$(pacman -Q | wc -l)
-    local explicit=$(pacman -Qe | wc -l)
+    local packages explicit
+    if [[ -f "$HEADER_CACHE_FILE" ]]; then
+        read -r packages explicit < "$HEADER_CACHE_FILE"
+    else
+        packages=$(pacman -Qq | wc -l)
+        explicit=$(pacman -Qeq | wc -l)
+        echo "$packages $explicit" > "$HEADER_CACHE_FILE"
+    fi
     local updates=$(cat "$UPDATE_CACHE_FILE" 2>/dev/null || echo "0")
     local pacman_cache=$(get_pacman_cache_size)
     local yay_cache=$(get_yay_cache_size)
-    local bold=$(tput bold)
-    local cyan=$(tput setaf 6)
-    local normal=$(tput sgr0)
 
     printf " ___ ___ __  __\n"
-    printf "/ __| _ \\  \\/  | ${bold}${cyan}Simple Package Manager${normal}\n"
-    printf "\\__ \\  _/ |\\/| | ${bold}Pacman${normal} %-9s ${bold}Yay${normal} %-9s\n" "$pacman_cache" "$yay_cache"
-    printf "|___/_| |_|  |_| ${bold}Packages${normal} %-5d ${bold}Explicit${normal} %-5d ${bold}Updates${normal} %-5d\n" "$packages" "$explicit" "$updates"
+    printf "/ __| _ \\\\  \\/  | \033[1m\033[36mSimple Package Manager\033[0m\n"
+    printf "\\\\__ \\\\  _/ |\\/| | \033[1mPacman\033[0m %-9s \033[1mYay\033[0m %-9s\n" "$pacman_cache" "$yay_cache"
+    printf "|___/_| |_|  |_| \033[1mPackages\033[0m %-5d \033[1mExplicit\033[0m %-5d \033[1mUpdates\033[0m %-5d\n" "$packages" "$explicit" "$updates"
     printf " \n"
 }
 
@@ -74,9 +86,9 @@ get_preview_width() {
 }
 
 get_pacman_cache_size() {
-    local cache_dir="/var/cache/pacman/pkg"
-    local size=$(find "$cache_dir" -type f -name "*.pkg.tar*" -print0 2>/dev/null | du -ch --files0-from=- 2>/dev/null | tail -n 1 | cut -f1)
-    if [[ -z "$size" || "$size" == "0" || "$size" == "0B" ]]; then
+    local size
+    size=$(du -sh /var/cache/pacman/pkg 2>/dev/null | cut -f1)
+    if [[ -z "$size" || "$size" == "0" ]]; then
         echo "0"
     else
         echo "$size"
@@ -84,9 +96,9 @@ get_pacman_cache_size() {
 }
 
 get_yay_cache_size() {
-    local cache_dir="$HOME/.cache/yay"
-    local size=$(find "$cache_dir" -type f \( -name "*.pkg.tar*" -o -name "*.src.tar.gz" \) -print0 2>/dev/null | du -ch --files0-from=- 2>/dev/null | tail -n 1 | cut -f1)
-    if [[ -z "$size" || "$size" == "0" || "$size" == "0B" ]]; then
+    local size
+    size=$(du -sh "$HOME/.cache/yay" 2>/dev/null | cut -f1)
+    if [[ -z "$size" || "$size" == "0" ]]; then
         echo "0"
     else
         echo "$size"
@@ -94,19 +106,7 @@ get_yay_cache_size() {
 }
 
 print_header() {
-    local packages=$(pacman -Q | wc -l)
-    local explicit=$(pacman -Qe | wc -l)
-    local updates=$(cat "$UPDATE_CACHE_FILE" 2>/dev/null || echo "0")
-    local pacman_cache=$(get_pacman_cache_size)
-    local yay_cache=$(get_yay_cache_size)
-    local bold=$(tput bold)
-    local cyan=$(tput setaf 6)
-    local normal=$(tput sgr0)
-
-    printf " ___ ___ __  __\n"
-    printf "/ __| _ \\  \\/  | ${bold}${cyan}Simple Package Manager${normal}\n"
-    printf "\\__ \\  _/ |\\/| | ${bold}Pacman${normal} %-9s ${bold}Yay${normal} %-9s\n" "$pacman_cache" "$yay_cache"
-    printf "|___/_| |_|  |_| ${bold}Packages${normal} %-5d ${bold}Explicit${normal} %-5d ${bold}Updates${normal} %-5d\n" "$packages" "$explicit" "$updates"
+    get_spm_header
     echo
 }
 
@@ -262,6 +262,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 echo "0" > "$UPDATE_CACHE_FILE"
                 echo "No updates available." > "$DETAILED_UPDATE_CACHE_FILE"
                 rm -f "$PACKAGE_LIST_CACHE"
+                refresh_header_cache
                 ;;
             "All [Review]"*)
                 echo "Performing full update..."
@@ -269,6 +270,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 echo "0" > "$UPDATE_CACHE_FILE"
                 echo "No updates available." > "$DETAILED_UPDATE_CACHE_FILE"
                 rm -f "$PACKAGE_LIST_CACHE"
+                refresh_header_cache
                 ;;
             "System [Review]"*)
                 echo "Updating system packages..."
@@ -276,6 +278,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 echo "0" > "$UPDATE_CACHE_FILE"
                 echo "No updates available." > "$DETAILED_UPDATE_CACHE_FILE"
                 rm -f "$PACKAGE_LIST_CACHE"
+                refresh_header_cache
                 ;;
             "AUR-devel"*)
                 echo "Checking AUR development packages for updates..."
@@ -283,6 +286,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 echo "0" > "$UPDATE_CACHE_FILE"
                 echo "No updates available." > "$DETAILED_UPDATE_CACHE_FILE"
                 rm -f "$PACKAGE_LIST_CACHE"
+                refresh_header_cache
                 ;;
         esac
 
@@ -399,7 +403,7 @@ install() {
         while true; do
             preview_width=$(cat "$preview_file")
 
-            local selected_packages=$(cat "$cache_file" | fzf --multi --reverse \
+            local selected_packages=$(fzf --multi --reverse < "$cache_file" \
                 --style=full:line \
                 --no-highlight-line \
                 --cycle \
@@ -496,6 +500,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
             * )
                 yay -S $selected_packages
                 rm -f "$cache_file"
+                refresh_header_cache
                 echo
                 if [[ $CLI_MODE -eq 1 ]]; then
                     read -p "Press any key to return to install menu or Ctrl+C to exit... " -n 1 -s -r
@@ -542,13 +547,15 @@ remove() {
                 red=$(tput setaf 1)
                 normal=$(tput sgr0)
 
+                pkg_info=$(yay -Qi {1} 2>/dev/null)
+
                 echo -e "${bold}${red}⚠ Package Information: {1}${normal}"
                 echo
                 echo -e "${bold}${cyan}Package Information${normal}"
-                yay -Qi {1}
+                echo "$pkg_info"
                 echo
                 echo -e "${bold}${yellow}Required By:${normal}"
-                pacman -Qi {1} | grep "Required By" | cut -d":" -f2
+                echo "$pkg_info" | grep "Required By" | cut -d":" -f2
                 echo
                 echo -e "${bold}Installed Files:${normal}"
                 pacman -Ql {1} | grep -v "/$" | cut -d" " -f2- | head -100
@@ -642,6 +649,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
             * )
                 yay $pacman_args $selected_packages
                 rm -f "$PACKAGE_LIST_CACHE"
+                refresh_header_cache
                 echo
                 if [[ $CLI_MODE -eq 1 ]]; then
                     read -p "Press any key to return to remove menu or Ctrl+C to exit... " -n 1 -s -r
@@ -691,14 +699,16 @@ explore_dependencies() {
                     yellow=$(tput setaf 3)
                     normal=$(tput sgr0)
 
+                    pkg_info=$(pacman -Qi {1} 2>/dev/null)
+
                     echo -e "${bold}${cyan}Package: {1}${normal}"
                     echo
                     echo -e "${bold}Description:${normal}"
-                    pacman -Qi {1} | grep "Description" | cut -d":" -f2-
+                    echo "$pkg_info" | grep "Description" | cut -d":" -f2-
                     echo
                     echo -e "${bold}${green}Required By:${normal}"
                     echo "Packages that depend on this:"
-                    req_by=$(pacman -Qi {1} | grep "Required By" | cut -d":" -f2-)
+                    req_by=$(echo "$pkg_info" | grep "Required By" | cut -d":" -f2-)
                     if [[ "$req_by" == *"None"* ]]; then
                         echo "  ${green}None - can be safely removed${normal}"
                     else
@@ -707,7 +717,7 @@ explore_dependencies() {
                     echo
                     echo -e "${bold}${yellow}Dependencies:${normal}"
                     echo "This package depends on:"
-                    pacman -Qi {1} | grep "Depends On" | cut -d":" -f2- | tr " " "\n" | sed "s/^/  /"
+                    echo "$pkg_info" | grep "Depends On" | cut -d":" -f2- | tr " " "\n" | sed "s/^/  /"
                 ' \
                 --preview-window="right:${preview_width}%:wrap" \
                 --header="Select a dependency package to explore | Enter to view details | Ctrl+C to return
@@ -820,7 +830,7 @@ find_high_impact_removals() {
     while true; do
         preview_width=$(cat "$preview_file")
 
-        local selected_line=$(cat "$temp_file" | fzf --reverse \
+        local selected_line=$(fzf --reverse < "$temp_file" \
             --style=full:line \
             --no-highlight-line \
             --cycle \
@@ -837,24 +847,27 @@ find_high_impact_removals() {
                 pkg=$(echo {} | awk "{print \$2}")
                 count=$(echo {} | awk "{print \$1}")
 
+                pkg_info=$(pacman -Qi "$pkg" 2>/dev/null)
+
                 echo -e "${bold}${cyan}$pkg${normal}"
                 echo
-                pacman -Qi "$pkg" 2>/dev/null | grep "Description" | cut -d":" -f2-
+                echo "$pkg_info" | grep "Description" | cut -d":" -f2-
                 echo
                 echo -e "${bold}${yellow}Would remove $count package(s)${normal}"
                 echo
                 echo -e "${bold}${green}Install Reason:${normal}"
-                pacman -Qi "$pkg" 2>/dev/null | grep "Install Reason" | cut -d":" -f2-
+                echo "$pkg_info" | grep "Install Reason" | cut -d":" -f2-
                 echo
                 echo -e "${bold}Dependencies to be removed:${normal}"
-                pacman -Rsp "$pkg" 2>/dev/null | sed "s/^/  /" | head -30
-                removal_count=$(pacman -Rsp "$pkg" 2>/dev/null | wc -l)
+                removal_list=$(pacman -Rsp "$pkg" 2>/dev/null)
+                echo "$removal_list" | head -30 | sed "s/^/  /"
+                removal_count=$(echo "$removal_list" | wc -l)
                 if [[ "$removal_count" -gt 30 ]]; then
                     echo "  ... and $((removal_count - 30)) more"
                 fi
                 echo
                 echo -e "${bold}Install Information:${normal}"
-                pacman -Qi "$pkg" 2>/dev/null | grep -E "Install Date|Installed Size" | sed "s/^/  /"
+                echo "$pkg_info" | grep -E "Install Date|Installed Size" | sed "s/^/  /"
             ' \
             --preview-window="right:${preview_width}%:wrap" \
             --header="High-impact removal candidates | Enter to view details | Ctrl+C to return
@@ -913,62 +926,65 @@ browse_explicit_packages() {
 
         echo 0 > "$resize_flag"
 
+        local explicit_tmp="/tmp/spm_explicit_list_$$.tmp"
+        pacman -Qeq > "$explicit_tmp"
+
         while true; do
             preview_width=$(cat "$preview_file")
 
-            local package_list=$(pacman -Qe | awk '{print $1}')
-            local selected_package=$(echo "$package_list" | fzf --reverse \
+            local selected_package=$(fzf --reverse < "$explicit_tmp" \
                 --style=full:line \
                 --no-highlight-line \
                 --cycle \
                 --scrollbar='█' \
                 --preview-border=line \
                 --border-label=" Explicitly Installed Packages " \
-                --preview '
-                    bold=$(tput bold)
-                    cyan=$(tput setaf 6)
-                    yellow=$(tput setaf 3)
-                    red=$(tput setaf 1)
-                    normal=$(tput sgr0)
+                --preview "
+                    bold=\$(tput bold)
+                    cyan=\$(tput setaf 6)
+                    yellow=\$(tput setaf 3)
+                    red=\$(tput setaf 1)
+                    normal=\$(tput sgr0)
 
                     pkg={1}
 
-                    echo -e "${bold}${cyan}$pkg${normal}"
+                    echo -e \"\${bold}\${cyan}\$pkg\${normal}\"
                     echo
-                    pacman -Qi "$pkg" 2>/dev/null | grep "Description" | cut -d":" -f2-
+                    pkg_info=\$(pacman -Qi \"\$pkg\" 2>/dev/null)
+                    echo \"\$pkg_info\" | grep 'Description' | cut -d':' -f2-
                     echo
-                    echo -e "${bold}${yellow}Removal Impact:${normal}"
+                    echo -e \"\${bold}\${yellow}Removal Impact:\${normal}\"
 
-                    removal_list=$(pacman -Rsp "$pkg" 2>/dev/null)
-                    removed_count=$(echo "$removal_list" | wc -l)
+                    removal_list=\$(pacman -Rsp \"\$pkg\" 2>/dev/null)
+                    removed_count=\$(echo \"\$removal_list\" | wc -l)
 
-                    explicit_list=$(pacman -Qe | cut -d" " -f1 | tr "\n" " ")
+                    explicit_list=\$(tr '\n' ' ' < '$explicit_tmp')
 
                     conflict=false
-                    for removed in $removal_list; do
-                        if [[ "$removed" != "$pkg" ]] && [[ " $explicit_list " =~ " $removed " ]]; then
+                    for removed in \$removal_list; do
+                        if [[ \"\$removed\" != \"\$pkg\" ]] && [[ \" \$explicit_list \" =~ \" \$removed \" ]]; then
                             conflict=true
                             break
                         fi
                     done
 
-                    if [[ "$conflict" == true ]]; then
-                        echo -e "${red}Would remove other explicit packages${normal}"
+                    if [[ \"\$conflict\" == true ]]; then
+                        echo -e \"\${red}Would remove other explicit packages\${normal}\"
                     else
-                        echo -e "Would remove ${yellow}$removed_count${normal} total packages"
+                        echo -e \"Would remove \${yellow}\$removed_count\${normal} total packages\"
                     fi
                     echo
-                    echo -e "${bold}Dependencies to be removed:${normal}"
-                    echo "$removal_list" | head -30 | sed "s/^/  /"
-                    if [[ "$removed_count" -gt 30 ]]; then
-                        echo "  ... and $((removed_count - 30)) more"
+                    echo -e \"\${bold}Dependencies to be removed:\${normal}\"
+                    echo \"\$removal_list\" | head -30 | sed 's/^/  /'
+                    if [[ \"\$removed_count\" -gt 30 ]]; then
+                        echo \"  ... and \$((\$removed_count - 30)) more\"
                     fi
                     echo
-                    echo -e "${bold}Installed:${normal}"
-                    pacman -Qi "$pkg" 2>/dev/null | grep "Install Date" | cut -d":" -f2- | sed "s/^/  /"
-                    echo -e "${bold}Size:${normal}"
-                    pacman -Qi "$pkg" 2>/dev/null | grep "Installed Size" | cut -d":" -f2- | sed "s/^/  /"
-                ' \
+                    echo -e \"\${bold}Installed:\${normal}\"
+                    echo \"\$pkg_info\" | grep 'Install Date' | cut -d':' -f2- | sed 's/^/  /'
+                    echo -e \"\${bold}Size:\${normal}\"
+                    echo \"\$pkg_info\" | grep 'Installed Size' | cut -d':' -f2- | sed 's/^/  /'
+                " \
                 --preview-window="right:${preview_width}%:wrap" \
                 --header="Browse explicitly installed packages | Enter to view details | Ctrl+C to return
 Alt+[ increase preview | Alt+] decrease preview" \
@@ -983,10 +999,12 @@ Alt+[ increase preview | Alt+] decrease preview" \
                     echo 0 > "$resize_flag"
                     continue
                 else
+                    rm -f "$explicit_tmp"
                     return
                 fi
             fi
 
+            rm -f "$explicit_tmp"
             clear_screen
             echo "${bold}${cyan}Package: $selected_package${normal}"
             echo "Description: $(pacman -Qi "$selected_package" | grep "Description" | cut -d":" -f2-)"
@@ -1173,8 +1191,6 @@ Alt+[ increase preview | Alt+] decrease preview" \
 
 orphan() {
     while true; do
-        clear
-
         local preview_width=$(get_preview_width)
         local preview_file="$PREVIEW_WIDTH_FILE"
         local resize_flag="$RESIZE_FLAG_FILE"
@@ -1201,6 +1217,68 @@ Alt+[ increase preview | Alt+] decrease preview"
             "$menu_label"
         )
 
+        local orphan_preview="/tmp/spm_orphan_preview_$$.tmp"
+        local orphan_tmp_a="/tmp/spm_orphan_a_$$.tmp"
+        local orphan_tmp_b="/tmp/spm_orphan_b_$$.tmp"
+
+        pacman -Qdtq 2>/dev/null > "$orphan_tmp_a" &
+        local pid1=$!
+        (pacman -Qqd 2>/dev/null | xargs pacman -Rsu --print 2>/dev/null | grep "^  " | awk '{print $1}') > "$orphan_tmp_b" &
+        local pid2=$!
+        wait $pid1 $pid2
+
+        local orphan_data
+        orphan_data=$(< "$orphan_tmp_a")
+        local unneeded_data
+        unneeded_data=$(< "$orphan_tmp_b")
+        rm -f "$orphan_tmp_a" "$orphan_tmp_b"
+
+        local orphan_count=0
+        if [[ -n "$orphan_data" ]]; then
+            orphan_count=$(echo "$orphan_data" | wc -l)
+        fi
+        local unneeded_count=0
+        if [[ -n "$unneeded_data" ]]; then
+            unneeded_count=$(echo "$unneeded_data" | wc -l)
+        fi
+
+        {
+            printf '\033[1m\033[33mOrphaned Packages:\033[0m\n'
+            echo "Installed as dependencies but no longer required"
+            if [[ "$orphan_count" -gt 0 ]]; then
+                echo "Count: $orphan_count"
+                echo
+                echo "$orphan_data" | head -20
+                if [[ $orphan_count -gt 20 ]]; then
+                    echo "... and $((orphan_count - 20)) more"
+                fi
+            else
+                echo "Count: 0"
+                echo
+                echo "None found"
+            fi
+            echo
+            printf '\033[1m\033[31mUnneeded Packages:\033[0m\n'
+            echo "Dependencies not required by explicitly installed packages"
+            if [[ "$unneeded_count" -gt 0 ]]; then
+                echo "Count: $unneeded_count"
+                echo
+                echo "$unneeded_data" | head -20
+                if [[ $unneeded_count -gt 20 ]]; then
+                    echo "... and $((unneeded_count - 20)) more"
+                fi
+            else
+                echo "Count: 0"
+                echo
+                echo "None found"
+            fi
+        } > "$orphan_preview"
+
+        local spm_header
+        spm_header=$(get_spm_header)
+
+        clear
+
         while true; do
             preview_width=$(cat "$preview_file")
 
@@ -1213,73 +1291,35 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --header-label=" Clean Orphans " \
                 --header-label-pos=0:bottom \
                 --header-border=line \
-                --preview '
-                    bold=$(tput bold)
-                    cyan=$(tput setaf 6)
-                    yellow=$(tput setaf 3)
-                    red=$(tput setaf 1)
-                    normal=$(tput sgr0)
-
+                --preview "
                     echo
-                    echo -e "${bold}${cyan}Clean Orphans Information${normal}"
+                    printf '\033[1m\033[36mClean Orphans Information\033[0m\n'
                     echo
-                    echo -e "${bold}Command to execute:${normal}"
+                    printf '\033[1mCommand to execute:\033[0m\n'
                     case {} in
-                        "All Orphans [Auto]"*)
-                            echo "sudo pacman -Rns \$(pacman -Qdtq) --noconfirm"
-                            echo "sudo pacman -Rsu \$(pacman -Qqd) --noconfirm"
+                        'All Orphans [Auto]'*)
+                            echo 'sudo pacman -Rns \$(pacman -Qdtq) --noconfirm'
+                            echo 'sudo pacman -Rsu \$(pacman -Qqd) --noconfirm'
                             ;;
-                        "Orphaned Only"*)
-                            echo "sudo pacman -Rns \$(pacman -Qdtq)"
+                        'Orphaned Only'*)
+                            echo 'sudo pacman -Rns \$(pacman -Qdtq)'
                             ;;
-                        "Unneeded Only"*)
-                            echo "sudo pacman -Rsu \$(pacman -Qqd)"
+                        'Unneeded Only'*)
+                            echo 'sudo pacman -Rsu \$(pacman -Qqd)'
                             ;;
-                        "Both Types"*)
-                            echo "sudo pacman -Rns \$(pacman -Qdtq)"
-                            echo "sudo pacman -Rsu \$(pacman -Qqd)"
+                        'Both Types'*)
+                            echo 'sudo pacman -Rns \$(pacman -Qdtq)'
+                            echo 'sudo pacman -Rsu \$(pacman -Qqd)'
                             ;;
                         *)
-                            echo "No command to execute"
+                            echo 'No command to execute'
                             ;;
                     esac
                     echo
-                    echo -e "${bold}${yellow}Orphaned Packages:${normal}"
-                    echo "Installed as dependencies but no longer required"
-                    orphans=$(pacman -Qdtq 2>/dev/null)
-                    if [[ -n "$orphans" ]]; then
-                        orphan_count=$(echo "$orphans" | wc -l)
-                        echo "Count: $orphan_count"
-                        echo
-                        echo "$orphans" | head -20
-                        if [[ $orphan_count -gt 20 ]]; then
-                            echo "... and $((orphan_count - 20)) more"
-                        fi
-                    else
-                        echo "Count: 0"
-                        echo
-                        echo "None found"
-                    fi
-                    echo
-                    echo -e "${bold}${red}Unneeded Packages:${normal}"
-                    echo "Dependencies not required by explicitly installed packages"
-                    unneeded=$(pacman -Qqd 2>/dev/null | xargs pacman -Rsu --print 2>/dev/null | grep "^  " | awk "{print \$1}")
-                    if [[ -n "$unneeded" ]]; then
-                        unneeded_count=$(echo "$unneeded" | wc -l)
-                        echo "Count: $unneeded_count"
-                        echo
-                        echo "$unneeded" | head -20
-                        if [[ $unneeded_count -gt 20 ]]; then
-                            echo "... and $((unneeded_count - 20)) more"
-                        fi
-                    else
-                        echo "Count: 0"
-                        echo
-                        echo "None found"
-                    fi
-                ' \
+                    cat '$orphan_preview'
+                " \
                 --preview-window="right:${preview_width}%:wrap" \
-                --header="$(get_spm_header)" \
+                --header="${spm_header}" \
                 --footer="$footer_text" \
                 --footer-border=line \
                 --bind 'ctrl-c:abort' \
@@ -1299,12 +1339,15 @@ Alt+[ increase preview | Alt+] decrease preview"
                         clear
                         echo "Exiting SPM - Simple Package Manager. Goodbye!"
                     fi
+                    rm -f "$orphan_preview"
                     return
                 fi
             fi
 
             break
         done
+
+        rm -f "$orphan_preview"
 
         if [[ "$selected_option" == "← Menu" || "$selected_option" == "← Exit" ]]; then
             if [[ $CLI_MODE -eq 1 ]]; then
@@ -1323,15 +1366,14 @@ Alt+[ increase preview | Alt+] decrease preview"
         case "$selected_option" in
             "All Orphans [Auto]"*)
                 echo "Performing quick removal..."
-                sudo pacman -Rns $(pacman -Qdtq) --noconfirm 2>/dev/null
+                [[ -n "$orphan_data" ]] && sudo pacman -Rns $orphan_data --noconfirm 2>/dev/null
                 sudo pacman -Rsu $(pacman -Qqd) --noconfirm 2>/dev/null
                 echo "Removal complete."
                 ;;
             "Orphaned Only"*)
-                local orphans=$(pacman -Qdtq 2>/dev/null)
-                if [[ -n "$orphans" ]]; then
+                if [[ -n "$orphan_data" ]]; then
                     echo "${bold}${cyan}The following orphaned packages will be removed:${normal}"
-                    echo "$orphans" | sed 's/^/  → /'
+                    echo "$orphan_data" | sed 's/^/  → /'
                     echo
 
                     local confirm
@@ -1358,7 +1400,7 @@ Alt+[ increase preview | Alt+] decrease preview"
 
                     if ! $operation_cancelled; then
                         if [[ ! $confirm =~ ^[Nn]o?$ ]]; then
-                            sudo pacman -Rns $orphans
+                            sudo pacman -Rns $orphan_data
                         else
                             echo "Operation cancelled."
                             sleep 1
@@ -1372,7 +1414,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 fi
                 ;;
             "Unneeded Only"*)
-                local unneeded=$(pacman -Qqd 2>/dev/null | xargs pacman -Rsu --print 2>/dev/null | grep "^  " | awk '{print $1}')
+                local unneeded="$unneeded_data"
                 if [[ -n "$unneeded" ]]; then
                     echo "${bold}${cyan}The following unneeded packages will be removed:${normal}"
                     echo "$unneeded" | sed 's/^/  → /'
@@ -1416,8 +1458,8 @@ Alt+[ increase preview | Alt+] decrease preview"
                 fi
                 ;;
             "Both Types"*)
-                local orphans=$(pacman -Qdtq 2>/dev/null)
-                local unneeded=$(pacman -Qqd 2>/dev/null | xargs pacman -Rsu --print 2>/dev/null | grep "^  " | awk '{print $1}')
+                local orphans="$orphan_data"
+                local unneeded="$unneeded_data"
 
                 if [[ -n "$orphans" || -n "$unneeded" ]]; then
                     echo "${bold}${cyan}The following packages will be removed:${normal}"
@@ -1736,6 +1778,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
         clear_screen
         echo "All selected packages have been processed."
         rm -f "$PACKAGE_LIST_CACHE"
+        refresh_header_cache
 
         echo
         if [[ $CLI_MODE -eq 1 ]]; then
@@ -1753,8 +1796,6 @@ Alt+[ increase preview | Alt+] decrease preview" \
 
 clear_cache() {
     while true; do
-        clear
-
         local preview_width=$(get_preview_width)
         local preview_file="$PREVIEW_WIDTH_FILE"
         local resize_flag="$RESIZE_FLAG_FILE"
@@ -1774,12 +1815,17 @@ Alt+[ increase preview | Alt+] decrease preview"
         fi
 
         local options=(
-            "All + Latest [Confirm]"
             "All - Latest [Auto]"
+            "All + Latest [Confirm]"
             "Pacman Cache"
             "AUR Cache"
             "$menu_label"
         )
+
+        local spm_header
+        spm_header=$(get_spm_header)
+
+        clear
 
         while true; do
             preview_width=$(cat "$preview_file")
@@ -1793,58 +1839,52 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --header-border=line \
                 --header-label=" Clear Package Cache " \
                 --header-label-pos=0:bottom \
-                --preview '
-                    bold=$(tput bold)
-                    cyan=$(tput setaf 6)
-                    yellow=$(tput setaf 3)
-                    normal=$(tput sgr0)
-
+                --preview "
                     echo
-                    echo -e "${bold}${cyan}Clear Cache Information${normal}"
+                    printf '\033[1m\033[36mClear Cache Information\033[0m\n'
                     echo
-                    echo -e "${bold}Command to execute:${normal}"
+                    printf '\033[1mCommand to execute:\033[0m\n'
                     case {} in
-                        "All + Latest"*)
-                            echo "sudo rm -f /var/cache/pacman/pkg/*.pkg.tar.*"
-                            echo "yay -Scc --noconfirm"
+                        'All + Latest'*)
+                            echo 'sudo rm -f /var/cache/pacman/pkg/*.pkg.tar.*'
+                            echo 'yay -Scc --noconfirm'
                             ;;
-                        "All - Latest"*)
-                            echo "sudo pacman -Sc --noconfirm"
-                            echo "yay -Sc --noconfirm"
+                        'All - Latest'*)
+                            echo 'sudo pacman -Sc --noconfirm'
+                            echo 'yay -Sc --noconfirm'
                             ;;
-                        "Pacman Cache"*)
-                            echo "sudo pacman -Sc"
+                        'Pacman Cache'*)
+                            echo 'sudo pacman -Sc'
                             ;;
-                        "AUR Cache"*)
-                            echo "yay -Sc"
+                        'AUR Cache'*)
+                            echo 'yay -Sc'
                             ;;
                         *)
-                            echo "No command to execute"
+                            echo 'No command to execute'
                             ;;
                     esac
                     echo
-                    echo -e "${bold}${yellow}Current Cache Sizes:${normal}"
-                    pacman_cache=$(du -sh /var/cache/pacman/pkg 2>/dev/null | cut -f1)
-                    echo "pacman cache: $pacman_cache"
-                    yay_pkg_size=$(find ~/.cache/yay -name "*.pkg.tar.*" -type f 2>/dev/null | xargs du -ch 2>/dev/null | tail -1 | cut -f1)
-                    if [[ -n "$yay_pkg_size" && "$yay_pkg_size" != "0" ]]; then
-                        echo "AUR package cache: $yay_pkg_size"
+                    printf '\033[1m\033[33mCurrent Cache Sizes:\033[0m\n'
+                    pacman_cache=\$(du -sh /var/cache/pacman/pkg 2>/dev/null | cut -f1)
+                    echo \"pacman cache: \$pacman_cache\"
+                    yay_pkg_size=\$(du -sh ~/.cache/yay 2>/dev/null | cut -f1)
+                    if [[ -n \"\$yay_pkg_size\" && \"\$yay_pkg_size\" != '0' ]]; then
+                        echo \"AUR cache: \$yay_pkg_size\"
                     else
-                        echo "AUR package cache: 0"
+                        echo 'AUR cache: 0'
                     fi
                     echo
-                    echo -e "${bold}Pacman Cache Details:${normal}"
-                    total_pkgs=$(ls -1 /var/cache/pacman/pkg/*.pkg.tar.* 2>/dev/null | wc -l)
-                    unique_pkgs=$(ls -1 /var/cache/pacman/pkg/*.pkg.tar.* 2>/dev/null | sed "s/-[0-9].*$//" | sort -u | wc -l)
-                    echo "Total packages: $total_pkgs"
-                    echo "Unique packages: $unique_pkgs"
+                    printf '\033[1mPacman Cache Details:\033[0m\n'
+                    total_pkgs=\$(find /var/cache/pacman/pkg -maxdepth 1 -name '*.pkg.tar.*' 2>/dev/null | wc -l)
+                    unique_pkgs=\$(find /var/cache/pacman/pkg -maxdepth 1 -name '*.pkg.tar.*' 2>/dev/null | sed 's/-[0-9].*\$//' | sort -u | wc -l)
+                    echo \"Total packages: \$total_pkgs\"
+                    echo \"Unique packages: \$unique_pkgs\"
                     echo
-                    echo -e "${bold}Disk Usage:${normal}"
-                    df -h / | awk "NR==2 {print \"Used: \" \$3 \" of \" \$2 \" - \" \$5}"
-                    df -h / | awk "NR==2 {print \"Available: \" \$4}"
-                ' \
+                    printf '\033[1mDisk Usage:\033[0m\n'
+                    df -h / | awk 'NR==2 {print \"Used: \" \$3 \" of \" \$2 \" - \" \$5; print \"Available: \" \$4}'
+                " \
                 --preview-window="right:${preview_width}%:wrap" \
-                --header="$(get_spm_header)" \
+                --header="${spm_header}" \
                 --footer="$footer_text" \
                 --footer-border=line \
                 --bind 'ctrl-c:abort' \
@@ -3206,24 +3246,35 @@ manager() {
     local selected_option
     local preview_file="$PREVIEW_WIDTH_FILE"
     local resize_flag="$RESIZE_FLAG_FILE"
+    local recent_updated="/tmp/spm_recent_updated_$$.tmp"
+    local recent_installed="/tmp/spm_recent_installed_$$.tmp"
+    local recent_removed="/tmp/spm_recent_removed_$$.tmp"
 
     exit_script() {
+        rm -f "$recent_updated" "$recent_installed" "$recent_removed"
         clear
         echo "Exiting SPM - Simple Package Manager. Goodbye!"
         exit 0
     }
 
     while true; do
-        clear
+        echo 0 > "$resize_flag"
+
+        tac /var/log/pacman.log 2>/dev/null | awk '
+            /\[ALPM\] upgraded/ { gsub(/[()]/, "", $4); if (!up[$4]++) { print $4; if (++c >= 50) exit } }' > "$recent_updated"
+        tac /var/log/pacman.log 2>/dev/null | awk '
+            /\[ALPM\] installed/ { gsub(/[()]/, "", $4); if (!inst[$4]++) { print $4; if (++c >= 50) exit } }' > "$recent_installed"
+        tac /var/log/pacman.log 2>/dev/null | awk '
+            /\[ALPM\] removed/ { gsub(/[()]/, "", $4); if (!rem[$4]++) { print $4; if (++c >= 50) exit } }' > "$recent_removed"
+
+        local spm_header
+        spm_header=$(get_spm_header)
         preview_width=$(get_preview_width)
 
-        echo 0 > "$resize_flag"
+        clear
 
         while true; do
             preview_width=$(cat "$preview_file")
-
-            local spm_header
-            spm_header=$(get_spm_header)
 
             selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse \
                 --style=full:line \
@@ -3234,26 +3285,26 @@ manager() {
                 --header-border=line \
                 --header-label=" SPM Main Menu " \
                 --header-label-pos=0:bottom \
-                --preview '
-                    bold=$(tput bold)
-                    cyan=$(tput setaf 6)
-                    green=$(tput setaf 2)
-                    red=$(tput setaf 1)
-                    normal=$(tput sgr0)
+                --preview "
+                    bold=\$(tput bold)
+                    cyan=\$(tput setaf 6)
+                    green=\$(tput setaf 2)
+                    red=\$(tput setaf 1)
+                    normal=\$(tput sgr0)
 
-                    n=$(( (FZF_PREVIEW_LINES - 6) / 3 ))
-                    [ "$n" -lt 5 ] && n=5
+                    n=\$(( (FZF_PREVIEW_LINES - 6) / 3 ))
+                    [ \"\$n\" -lt 5 ] && n=5
 
                     echo
-                    echo -e "${bold}${green}Recently Updated:${normal}"
-                    tac /var/log/pacman.log 2>/dev/null | grep "^\[.*\] \[ALPM\] upgraded" | awk "{print \$4}" | sed "s/[()]//g" | awk "!seen[\$0]++" | head -n $n
+                    echo -e \"\${bold}\${green}Recently Updated:\${normal}\"
+                    head -n \$n '$recent_updated'
                     echo
-                    echo -e "${bold}${cyan}Recently Installed:${normal}"
-                    tac /var/log/pacman.log 2>/dev/null | grep "^\[.*\] \[ALPM\] installed" | awk "{print \$4}" | sed "s/[()]//g" | awk "!seen[\$0]++" | head -n $n
+                    echo -e \"\${bold}\${cyan}Recently Installed:\${normal}\"
+                    head -n \$n '$recent_installed'
                     echo
-                    echo -e "${bold}${red}Recently Removed:${normal}"
-                    tac /var/log/pacman.log 2>/dev/null | grep "^\[.*\] \[ALPM\] removed" | awk "{print \$4}" | sed "s/[()]//g" | awk "!seen[\$0]++" | head -n $n
-                ' \
+                    echo -e \"\${bold}\${red}Recently Removed:\${normal}\"
+                    head -n \$n '$recent_removed'
+                " \
                 --preview-window="right:${preview_width}%:wrap" \
                 --header="${spm_header}" \
                 --footer="Enter to select | Ctrl+C to exit
