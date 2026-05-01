@@ -17,6 +17,18 @@ HEADER_CACHE_FILE="$SPM_CACHE_DIR/header-cache.txt"
 PREVIEW_WIDTH_FILE="$SPM_CACHE_DIR/preview_width"
 RESIZE_FLAG_FILE="$SPM_CACHE_DIR/resize_flag"
 
+export BOLD=$'\033[1m'
+export CYAN=$'\033[36m'
+export GREEN=$'\033[32m'
+export YELLOW=$'\033[33m'
+export RED=$'\033[31m'
+export RESET=$'\033[0m'
+
+FZF_RESIZE_BINDS=(
+    --bind "alt-[:execute-silent(new_width=\$(cat $PREVIEW_WIDTH_FILE); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $PREVIEW_WIDTH_FILE; echo 1 > $RESIZE_FLAG_FILE)+abort"
+    --bind "alt-]:execute-silent(new_width=\$(cat $PREVIEW_WIDTH_FILE); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $PREVIEW_WIDTH_FILE; echo 1 > $RESIZE_FLAG_FILE)+abort"
+)
+
 ensure_spm_var_dir() {
     if [[ ! -d "$SPM_CACHE_DIR" ]]; then
         sudo mkdir -p "$SPM_CACHE_DIR"
@@ -32,6 +44,25 @@ ensure_spm_var_dir() {
 }
 
 ensure_spm_var_dir
+
+spm_read_input() {
+    local prompt="$1"
+    local tmp rc
+    tmp=$(mktemp /tmp/spm_input.XXXXXX)
+    (
+        trap 'exit 130' INT
+        local val
+        read -p "$prompt" val
+        echo "$val" > "$tmp"
+    )
+    rc=$?
+    if [[ $rc -eq 130 ]]; then
+        rm -f "$tmp"
+        return 130
+    fi
+    cat "$tmp"
+    rm -f "$tmp"
+}
 
 clear_screen() {
     clear
@@ -84,11 +115,10 @@ get_spm_header() {
 }
 
 get_preview_width() {
-    local preview_file="$PREVIEW_WIDTH_FILE"
-    if [[ ! -f "$preview_file" ]]; then
-        echo "60" > "$preview_file"
+    if [[ ! -f "$PREVIEW_WIDTH_FILE" ]]; then
+        echo "60" > "$PREVIEW_WIDTH_FILE"
     fi
-    cat "$preview_file"
+    cat "$PREVIEW_WIDTH_FILE"
 }
 
 get_pacman_cache_size() {
@@ -119,48 +149,43 @@ print_header() {
 show_help() {
     clear_screen
 
-    local bold=$(tput bold)
-    local cyan=$(tput setaf 6)
-    local green=$(tput setaf 2)
-    local yellow=$(tput setaf 3)
-    local normal=$(tput sgr0)
 
-    echo "${bold}${cyan}SPM - Simple Package Manager${normal}"
-    echo "${bold}A modern TUI wrapper for pacman/yay with fzf${normal}"
+    echo "${BOLD}${CYAN}SPM - Simple Package Manager${RESET}"
+    echo "${BOLD}A modern TUI wrapper for pacman/yay with fzf${RESET}"
     echo
-    echo "${bold}USAGE:${normal}"
+    echo "${BOLD}USAGE:${RESET}"
     echo "  spm [option] [arguments]"
     echo
-    echo "${bold}OPTIONS:${normal}"
-    echo "  ${green}-u${normal}, ${green}update${normal}        Update packages"
-    echo "  ${green}-i${normal}, ${green}install${normal}       Install packages"
-    echo "  ${green}-r${normal}, ${green}remove${normal}        Remove packages"
-    echo "  ${green}-o${normal}, ${green}orphan${normal}        Clean orphaned packages"
-    echo "  ${green}-d${normal}, ${green}downgrade${normal}     Downgrade packages"
-    echo "  ${green}-c${normal}, ${green}cache${normal}         Clear package cache"
-    echo "  ${green}-p${normal}, ${green}pacnew${normal}        Manage .pacnew and .pacsave files"
-    echo "  ${green}-H${normal}, ${green}hooks${normal}         Manage ALPM hooks"
-    echo "  ${green}-h${normal}, ${green}--help${normal}        Display this help message"
+    echo "${BOLD}OPTIONS:${RESET}"
+    echo "  ${GREEN}-u${RESET}, ${GREEN}update${RESET}        Update packages"
+    echo "  ${GREEN}-i${RESET}, ${GREEN}install${RESET}       Install packages"
+    echo "  ${GREEN}-r${RESET}, ${GREEN}remove${RESET}        Remove packages"
+    echo "  ${GREEN}-o${RESET}, ${GREEN}orphan${RESET}        Clean orphaned packages"
+    echo "  ${GREEN}-d${RESET}, ${GREEN}downgrade${RESET}     Downgrade packages"
+    echo "  ${GREEN}-c${RESET}, ${GREEN}cache${RESET}         Clear package cache"
+    echo "  ${GREEN}-p${RESET}, ${GREEN}pacnew${RESET}        Manage .pacnew and .pacsave files"
+    echo "  ${GREEN}-H${RESET}, ${GREEN}hooks${RESET}         Manage ALPM hooks"
+    echo "  ${GREEN}-h${RESET}, ${GREEN}--help${RESET}        Display this help message"
     echo
-    echo "${bold}EXAMPLES:${normal}"
-    echo "  ${yellow}spm${normal}                   Launch interactive menu"
-    echo "  ${yellow}spm -i firefox${normal}        Install Firefox"
-    echo "  ${yellow}spm -r firefox${normal}        Remove Firefox"
-    echo "  ${yellow}spm -u${normal}                Update packages menu"
+    echo "${BOLD}EXAMPLES:${RESET}"
+    echo "  ${YELLOW}spm${RESET}                   Launch interactive menu"
+    echo "  ${YELLOW}spm -i firefox${RESET}        Install Firefox"
+    echo "  ${YELLOW}spm -r firefox${RESET}        Remove Firefox"
+    echo "  ${YELLOW}spm -u${RESET}                Update packages menu"
     echo
-    echo "${bold}SYSTEMD TIMER:${normal}"
+    echo "${BOLD}SYSTEMD TIMER:${RESET}"
     echo "  Enable automatic update checking and cache syncing:"
-    echo "  ${yellow}systemctl enable --now spm_updates.timer${normal}"
+    echo "  ${YELLOW}systemctl enable --now spm_updates.timer${RESET}"
     echo
     echo "  Check timer status:"
-    echo "  ${yellow}systemctl status spm_updates.timer${normal}"
+    echo "  ${YELLOW}systemctl status spm_updates.timer${RESET}"
     echo
-    echo "${bold}CONFIGURATION:${normal}"
+    echo "${BOLD}CONFIGURATION:${RESET}"
     echo "  Cache location:     /var/cache/spm/"
     echo "  pacman config:      /etc/pacman.conf"
     echo
     echo "For more information, visit:"
-    echo "${cyan}https://github.com/adelmonte/Simple_Package_Manager${normal}"
+    echo "${CYAN}https://github.com/adelmonte/Simple_Package_Manager${RESET}"
     echo
 }
 
@@ -170,10 +195,8 @@ update() {
 
         if [[ -t 0 ]]; then
             local preview_width=$(get_preview_width)
-            local preview_file="$PREVIEW_WIDTH_FILE"
-            local resize_flag="$RESIZE_FLAG_FILE"
 
-            echo 0 > "$resize_flag"
+            echo 0 > "$RESIZE_FLAG_FILE"
         else
             local preview_width=50
         fi
@@ -206,14 +229,11 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --header-label=" Update Packages " \
                 --header-label-pos=0:bottom \
                 --preview '
-                    bold=$(tput bold)
-                    cyan=$(tput setaf 6)
-                    normal=$(tput sgr0)
 
                     echo
-                    echo -e "${bold}${cyan}Update Information${normal}"
+                    echo -e "${BOLD}${CYAN}Update Information${RESET}"
                     echo
-                    echo -e "${bold}Command to execute:${normal}"
+                    echo -e "${BOLD}Command to execute:${RESET}"
                     case {} in
                         "All [Auto]"*)           echo "yes | yay" ;;
                         "All [Review]"*)         echo "yay" ;;
@@ -222,7 +242,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                         *)                       echo "No command to execute" ;;
                     esac
                     echo
-                    echo -e "${bold}Upgradable Packages:${normal}"
+                    echo -e "${BOLD}Upgradable Packages:${RESET}"
                     echo
                     cat "'$DETAILED_UPDATE_CACHE_FILE'" 2>/dev/null || echo "No update information available."
                 ' \
@@ -232,15 +252,14 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --footer-border=line \
                 --bind 'ctrl-c:abort' \
                 --bind 'resize:refresh-preview' \
-                --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                "${FZF_RESIZE_BINDS[@]}" \
                 --height=100% \
                 --color=header:-1,footer:$FZF_FOOTER_COLOR \
                 --ansi)
 
         if [[ -z "$selected_option" ]]; then
-            if [[ -t 0 ]] && [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
-                echo 0 > "$resize_flag"
+            if [[ -t 0 ]] && [[ $(cat "$RESIZE_FLAG_FILE" 2>/dev/null || echo "0") -eq 1 ]]; then
+                echo 0 > "$RESIZE_FLAG_FILE"
                 continue
             else
                 if [[ $CLI_MODE -eq 1 ]]; then
@@ -317,12 +336,11 @@ install() {
 
         local search_query="$1"
         local preview_width=$(get_preview_width)
-        local preview_file="$PREVIEW_WIDTH_FILE"
-        local resize_flag="$RESIZE_FLAG_FILE"
         local cache_file="$PACKAGE_LIST_CACHE"
-        local installed_temp="/tmp/spm_installed_$$.tmp"
+        local installed_temp
+        installed_temp=$(mktemp /tmp/spm_installed.XXXXXX)
 
-        echo 0 > "$resize_flag"
+        echo 0 > "$RESIZE_FLAG_FILE"
 
         local regenerate_cache=false
 
@@ -410,7 +428,7 @@ install() {
         fi
 
         while true; do
-            preview_width=$(cat "$preview_file")
+            preview_width=$(cat "$PREVIEW_WIDTH_FILE")
 
             local selected_packages=$(fzf --multi --reverse < "$cache_file" \
                 --style=full:line \
@@ -420,26 +438,21 @@ install() {
                 --preview-border=line \
                 --border-label=" Install Packages " \
                 --preview "
-                    bold=\$(tput bold)
-                    cyan=\$(tput setaf 6)
-                    green=\$(tput setaf 2)
-                    yellow=\$(tput setaf 3)
-                    normal=\$(tput sgr0)
 
                     pkg_name=\$(echo {} | awk '{print \$1}')
 
                     if pacman -Qi \$pkg_name &>/dev/null; then
-                        echo -e \"\${bold}\${green}● Package Status: INSTALLED\${normal}\"
+                        echo -e \"\${BOLD}\${GREEN}● Package Status: INSTALLED\${RESET}\"
                         echo
-                        echo -e \"\${bold}\${cyan}Package Information\${normal}\"
+                        echo -e \"\${BOLD}\${CYAN}Package Information\${RESET}\"
                         yay -Qi \$pkg_name
                         echo
-                        echo -e \"\${bold}Installed Files:\${normal}\"
+                        echo -e \"\${BOLD}Installed Files:\${RESET}\"
                         pacman -Ql \$pkg_name | grep -v '/\$' | cut -d' ' -f2- | head -50
                     else
-                        echo -e \"\${bold}\${yellow}○ Package Status: NOT INSTALLED\${normal}\"
+                        echo -e \"\${BOLD}\${YELLOW}○ Package Status: NOT INSTALLED\${RESET}\"
                         echo
-                        echo -e \"\${bold}\${cyan}Package Information\${normal}\"
+                        echo -e \"\${BOLD}\${CYAN}Package Information\${RESET}\"
                         yay -Si \$pkg_name
                     fi
                 " \
@@ -448,16 +461,15 @@ install() {
 Alt+[ increase preview | Alt+] decrease preview" \
                 --bind 'ctrl-c:abort' \
                 --bind 'resize:refresh-preview' \
-                --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                "${FZF_RESIZE_BINDS[@]}" \
                 --tiebreak=index \
                 --ansi \
                 ${search_query:+-q "$search_query"} \
                 | awk '{print $1}')
 
             if [[ -z "$selected_packages" ]]; then
-                if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
-                    echo 0 > "$resize_flag"
+                if [[ $(cat "$RESIZE_FLAG_FILE" 2>/dev/null || echo "0") -eq 1 ]]; then
+                    echo 0 > "$RESIZE_FLAG_FILE"
                     continue
                 else
                     if [[ $CLI_MODE -eq 1 ]]; then
@@ -471,33 +483,22 @@ Alt+[ increase preview | Alt+] decrease preview" \
             break
         done
 
-        local bold=$(tput bold)
-        local cyan=$(tput setaf 6)
-        local green=$(tput setaf 2)
-        local normal=$(tput sgr0)
 
-        echo "${bold}${cyan}The following packages will be installed:${normal}"
-        echo "$selected_packages" | sed "s/^/  ${green}→${normal} /"
+        echo "${BOLD}${CYAN}The following packages will be installed:${RESET}"
+        echo "$selected_packages" | sed "s/^/  ${GREEN}→${RESET} /"
         echo
 
         if [[ $CLI_MODE -eq 1 ]]; then
             trap 'echo; echo "Operation cancelled."; echo; echo "Exiting SPM - Simple Package Manager. Goodbye!"; exit 0' INT
-            read -p "${bold}Do you want to proceed? [Y/n]${normal} " confirm
+            read -p "${BOLD}Do you want to proceed? [Y/n]${RESET} " confirm
             trap - INT
         else
-            (
-                trap 'exit 130' INT
-                read -p "${bold}Do you want to proceed? [Y/n]${normal} " confirm
-                echo "$confirm" > /tmp/spm_install_confirm_$$
-            )
-            if [[ $? -eq 130 ]]; then
+            confirm=$(spm_read_input "${BOLD}Do you want to proceed? [Y/n]${RESET} ") || {
                 echo
                 echo "Operation cancelled. Returning to package selection..."
                 sleep 1
                 continue
-            fi
-            confirm=$(cat /tmp/spm_install_confirm_$$ 2>/dev/null)
-            rm -f /tmp/spm_install_confirm_$$
+            }
         fi
 
         case $confirm in
@@ -529,18 +530,11 @@ remove() {
     while true; do
         clear_screen
 
-        local bold=$(tput bold)
-        local cyan=$(tput setaf 6)
-        local yellow=$(tput setaf 3)
-        local red=$(tput setaf 1)
-        local normal=$(tput sgr0)
 
         local search_query="$1"
         local preview_width=$(get_preview_width)
-        local preview_file="$PREVIEW_WIDTH_FILE"
-        local resize_flag="$RESIZE_FLAG_FILE"
 
-        echo 0 > "$resize_flag"
+        echo 0 > "$RESIZE_FLAG_FILE"
 
         local selected_packages=$(pacman -Qq | fzf --multi --reverse \
             --style=full:line \
@@ -550,23 +544,18 @@ remove() {
             --preview-border=line \
             --border-label=" Remove Packages " \
             --preview '
-                bold=$(tput bold)
-                cyan=$(tput setaf 6)
-                yellow=$(tput setaf 3)
-                red=$(tput setaf 1)
-                normal=$(tput sgr0)
 
                 pkg_info=$(yay -Qi {1} 2>/dev/null)
 
-                echo -e "${bold}${red}⚠ Package Information: {1}${normal}"
+                echo -e "${BOLD}${RED}⚠ Package Information: {1}${RESET}"
                 echo
-                echo -e "${bold}${cyan}Package Information${normal}"
+                echo -e "${BOLD}${CYAN}Package Information${RESET}"
                 echo "$pkg_info"
                 echo
-                echo -e "${bold}${yellow}Required By:${normal}"
+                echo -e "${BOLD}${YELLOW}Required By:${RESET}"
                 echo "$pkg_info" | grep "Required By" | cut -d":" -f2
                 echo
-                echo -e "${bold}Installed Files:${normal}"
+                echo -e "${BOLD}Installed Files:${RESET}"
                 pacman -Ql {1} | grep -v "/$" | cut -d" " -f2- | head -100
             ' \
             --preview-window="right:$preview_width%:wrap" \
@@ -574,14 +563,13 @@ remove() {
 Alt+[ increase preview | Alt+] decrease preview" \
             --bind 'ctrl-c:abort' \
             --bind 'resize:refresh-preview' \
-            --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-            --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+            "${FZF_RESIZE_BINDS[@]}" \
             --ansi \
             ${search_query:+-q "$search_query"})
 
         if [[ -z "$selected_packages" ]]; then
-            if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
-                echo 0 > "$resize_flag"
+            if [[ $(cat "$RESIZE_FLAG_FILE" 2>/dev/null || echo "0") -eq 1 ]]; then
+                echo 0 > "$RESIZE_FLAG_FILE"
                 continue
             else
                 if [[ $CLI_MODE -eq 1 ]]; then
@@ -592,25 +580,25 @@ Alt+[ increase preview | Alt+] decrease preview" \
             fi
         fi
 
-        echo "${bold}${cyan}The following packages will be removed:${normal}"
+        echo "${BOLD}${CYAN}The following packages will be removed:${RESET}"
         echo "$selected_packages" | sed 's/^/  → /' | while read line; do
-            echo -e "${red}${line}${normal}"
+            echo -e "${RED}${line}${RESET}"
         done
         echo
 
-        echo "${bold}Package Removal Options:${normal}"
+        echo "${BOLD}Package Removal Options:${RESET}"
         echo "------------------------"
         echo
 
         local pacman_args=""
 
-        echo "  ${bold}1)${normal} Full removal (package, deps, configs, and reverse deps) ${yellow}-Rnsc${normal}"
-        echo "  ${bold}2)${normal} Standard removal (package, deps, and configs) ${yellow}-Rns${normal}"
-        echo "  ${bold}3)${normal} Remove package and configs only ${yellow}-Rn${normal}"
-        echo "  ${bold}4)${normal} Remove package and dependencies ${yellow}-Rs${normal}"
-        echo "  ${bold}5)${normal} Remove package only ${yellow}-R${normal}"
-        echo "  ${bold}6)${normal} Force removal ignoring dependencies ${yellow}-Rdd${normal} ${red}(dangerous)${normal}"
-        echo "  ${bold}7)${normal} Force removal with configs ${yellow}-Rddn${normal} ${red}(dangerous)${normal}"
+        echo "  ${BOLD}1)${RESET} Full removal (package, deps, configs, and reverse deps) ${YELLOW}-Rnsc${RESET}"
+        echo "  ${BOLD}2)${RESET} Standard removal (package, deps, and configs) ${YELLOW}-Rns${RESET}"
+        echo "  ${BOLD}3)${RESET} Remove package and configs only ${YELLOW}-Rn${RESET}"
+        echo "  ${BOLD}4)${RESET} Remove package and dependencies ${YELLOW}-Rs${RESET}"
+        echo "  ${BOLD}5)${RESET} Remove package only ${YELLOW}-R${RESET}"
+        echo "  ${BOLD}6)${RESET} Force removal ignoring dependencies ${YELLOW}-Rdd${RESET} ${RED}(dangerous)${RESET}"
+        echo "  ${BOLD}7)${RESET} Force removal with configs ${YELLOW}-Rddn${RESET} ${RED}(dangerous)${RESET}"
         echo
 
         if [[ $CLI_MODE -eq 1 ]]; then
@@ -618,19 +606,12 @@ Alt+[ increase preview | Alt+] decrease preview" \
             read -p "Enter option 1-7 [1] (Ctrl+C to cancel): " remove_option
             trap - INT
         else
-            (
-                trap 'exit 130' INT
-                read -p "Enter option 1-7 [1] (Ctrl+C to cancel): " remove_option
-                echo "$remove_option" > /tmp/spm_remove_option_$$
-            )
-            if [[ $? -eq 130 ]]; then
+            remove_option=$(spm_read_input "Enter option 1-7 [1] (Ctrl+C to cancel): ") || {
                 echo
                 echo "Operation cancelled. Returning to package selection..."
                 sleep 1
                 continue
-            fi
-            remove_option=$(cat /tmp/spm_remove_option_$$ 2>/dev/null)
-            rm -f /tmp/spm_remove_option_$$
+            }
         fi
 
         case $remove_option in
@@ -678,20 +659,13 @@ explore_dependencies() {
     while true; do
         clear_screen
 
-        local bold=$(tput bold)
-        local cyan=$(tput setaf 6)
-        local green=$(tput setaf 2)
-        local yellow=$(tput setaf 3)
-        local normal=$(tput sgr0)
 
         local preview_width=$(get_preview_width)
-        local preview_file="$PREVIEW_WIDTH_FILE"
-        local resize_flag="$RESIZE_FLAG_FILE"
 
-        echo 0 > "$resize_flag"
+        echo 0 > "$RESIZE_FLAG_FILE"
 
         while true; do
-            preview_width=$(cat "$preview_file")
+            preview_width=$(cat "$PREVIEW_WIDTH_FILE")
 
             local package_list=$(pacman -Qd | awk '{print $1}')
             local selected_package=$(echo "$package_list" | fzf --reverse \
@@ -702,29 +676,24 @@ explore_dependencies() {
                 --preview-border=line \
                 --border-label=" Explore Dependencies " \
                 --preview '
-                    bold=$(tput bold)
-                    cyan=$(tput setaf 6)
-                    green=$(tput setaf 2)
-                    yellow=$(tput setaf 3)
-                    normal=$(tput sgr0)
 
                     pkg_info=$(pacman -Qi {1} 2>/dev/null)
 
-                    echo -e "${bold}${cyan}Package: {1}${normal}"
+                    echo -e "${BOLD}${CYAN}Package: {1}${RESET}"
                     echo
-                    echo -e "${bold}Description:${normal}"
+                    echo -e "${BOLD}Description:${RESET}"
                     echo "$pkg_info" | grep "Description" | cut -d":" -f2-
                     echo
-                    echo -e "${bold}${green}Required By:${normal}"
+                    echo -e "${BOLD}${GREEN}Required By:${RESET}"
                     echo "Packages that depend on this:"
                     req_by=$(echo "$pkg_info" | grep "Required By" | cut -d":" -f2-)
                     if [[ "$req_by" == *"None"* ]]; then
-                        echo "  ${green}None - can be safely removed${normal}"
+                        echo "  ${GREEN}None - can be safely removed${RESET}"
                     else
                         echo "$req_by" | tr " " "\n" | sed "s/^/  /"
                     fi
                     echo
-                    echo -e "${bold}${yellow}Dependencies:${normal}"
+                    echo -e "${BOLD}${YELLOW}Dependencies:${RESET}"
                     echo "This package depends on:"
                     echo "$pkg_info" | grep "Depends On" | cut -d":" -f2- | tr " " "\n" | sed "s/^/  /"
                 ' \
@@ -733,13 +702,12 @@ explore_dependencies() {
 Alt+[ increase preview | Alt+] decrease preview" \
                 --bind 'ctrl-c:abort' \
                 --bind 'resize:refresh-preview' \
-                --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                "${FZF_RESIZE_BINDS[@]}" \
                 --ansi)
 
             if [[ -z "$selected_package" ]]; then
-                if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
-                    echo 0 > "$resize_flag"
+                if [[ $(cat "$RESIZE_FLAG_FILE" 2>/dev/null || echo "0") -eq 1 ]]; then
+                    echo 0 > "$RESIZE_FLAG_FILE"
                     continue
                 else
                     return
@@ -747,14 +715,14 @@ Alt+[ increase preview | Alt+] decrease preview" \
             fi
 
             clear_screen
-            echo "${bold}${cyan}Package: $selected_package${normal}"
+            echo "${BOLD}${CYAN}Package: $selected_package${RESET}"
             echo "Description: $(pacman -Qi $selected_package | grep "Description" | cut -d":" -f2-)"
             echo
-            echo "${bold}${green}Required By:${normal}"
+            echo "${BOLD}${GREEN}Required By:${RESET}"
             echo "Packages that depend on this:"
             pacman -Qi $selected_package | grep "Required By" | cut -d":" -f2- | tr " " "\n" | sed "s/^/  /"
             echo
-            echo "${bold}${yellow}Dependencies:${normal}"
+            echo "${BOLD}${YELLOW}Dependencies:${RESET}"
             echo "This package depends on:"
             pacman -Qi $selected_package | grep "Depends On" | cut -d":" -f2- | tr " " "\n" | sed "s/^/  /"
             echo
@@ -769,13 +737,8 @@ find_high_impact_removals() {
 
     local temp_file=$(mktemp)
 
-    local bold=$(tput bold)
-    local cyan=$(tput setaf 6)
-    local green=$(tput setaf 2)
-    local yellow=$(tput setaf 3)
-    local normal=$(tput sgr0)
 
-    echo "${bold}${cyan}Analyzing High-Impact Removals...${normal}"
+    echo "${BOLD}${CYAN}Analyzing High-Impact Removals...${RESET}"
     echo "Finding packages that would remove the most dependencies."
     echo
 
@@ -824,20 +787,18 @@ find_high_impact_removals() {
     mv "${temp_file}.sorted" "$temp_file"
 
     if [[ ! -s "$temp_file" ]]; then
-        echo "${yellow}No high-impact removal candidates found.${normal}"
+        echo "${YELLOW}No high-impact removal candidates found.${RESET}"
         rm "$temp_file"
         read -p "Press any key to return... " -n 1 -s -r
         return
     fi
 
     local preview_width=$(get_preview_width)
-    local preview_file="$PREVIEW_WIDTH_FILE"
-    local resize_flag="$RESIZE_FLAG_FILE"
 
-    echo 0 > "$resize_flag"
+    echo 0 > "$RESIZE_FLAG_FILE"
 
     while true; do
-        preview_width=$(cat "$preview_file")
+        preview_width=$(cat "$PREVIEW_WIDTH_FILE")
 
         local selected_line=$(fzf --reverse < "$temp_file" \
             --style=full:line \
@@ -847,27 +808,22 @@ find_high_impact_removals() {
             --preview-border=line \
             --border-label=" High-Impact Removals " \
             --preview '
-                bold=$(tput bold)
-                cyan=$(tput setaf 6)
-                green=$(tput setaf 2)
-                yellow=$(tput setaf 3)
-                normal=$(tput sgr0)
 
                 pkg=$(echo {} | awk "{print \$2}")
                 count=$(echo {} | awk "{print \$1}")
 
                 pkg_info=$(pacman -Qi "$pkg" 2>/dev/null)
 
-                echo -e "${bold}${cyan}$pkg${normal}"
+                echo -e "${BOLD}${CYAN}$pkg${RESET}"
                 echo
                 echo "$pkg_info" | grep "Description" | cut -d":" -f2-
                 echo
-                echo -e "${bold}${yellow}Would remove $count package(s)${normal}"
+                echo -e "${BOLD}${YELLOW}Would remove $count package(s)${RESET}"
                 echo
-                echo -e "${bold}${green}Install Reason:${normal}"
+                echo -e "${BOLD}${GREEN}Install Reason:${RESET}"
                 echo "$pkg_info" | grep "Install Reason" | cut -d":" -f2-
                 echo
-                echo -e "${bold}Dependencies to be removed:${normal}"
+                echo -e "${BOLD}Dependencies to be removed:${RESET}"
                 removal_list=$(pacman -Rsp "$pkg" 2>/dev/null)
                 echo "$removal_list" | head -30 | sed "s/^/  /"
                 removal_count=$(echo "$removal_list" | wc -l)
@@ -875,7 +831,7 @@ find_high_impact_removals() {
                     echo "  ... and $((removal_count - 30)) more"
                 fi
                 echo
-                echo -e "${bold}Install Information:${normal}"
+                echo -e "${BOLD}Install Information:${RESET}"
                 echo "$pkg_info" | grep -E "Install Date|Installed Size" | sed "s/^/  /"
             ' \
             --preview-window="right:${preview_width}%:wrap" \
@@ -883,13 +839,12 @@ find_high_impact_removals() {
 Alt+[ increase preview | Alt+] decrease preview" \
             --bind 'ctrl-c:abort' \
             --bind 'resize:refresh-preview' \
-            --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-            --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+            "${FZF_RESIZE_BINDS[@]}" \
             --ansi)
 
         if [[ -z "$selected_line" ]]; then
-            if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
-                echo 0 > "$resize_flag"
+            if [[ $(cat "$RESIZE_FLAG_FILE" 2>/dev/null || echo "0") -eq 1 ]]; then
+                echo 0 > "$RESIZE_FLAG_FILE"
                 continue
             else
                 rm "$temp_file"
@@ -901,18 +856,18 @@ Alt+[ increase preview | Alt+] decrease preview" \
         local removed_count=$(echo "$selected_line" | awk '{print $1}')
 
         clear_screen
-        echo "${bold}${cyan}Package: $selected_package${normal}"
+        echo "${BOLD}${CYAN}Package: $selected_package${RESET}"
         echo "Description: $(pacman -Qi "$selected_package" | grep "Description" | cut -d":" -f2-)"
         echo
-        echo "${bold}${green}Install Reason:${normal}"
+        echo "${BOLD}${GREEN}Install Reason:${RESET}"
         pacman -Qi "$selected_package" | grep "Install Reason" | cut -d":" -f2-
         echo
-        echo "${bold}${yellow}Would remove $removed_count package(s)${normal}"
+        echo "${BOLD}${YELLOW}Would remove $removed_count package(s)${RESET}"
         echo
-        echo "${bold}Dependencies to be removed:${normal}"
+        echo "${BOLD}Dependencies to be removed:${RESET}"
         pacman -Rsp "$selected_package" 2>/dev/null | sed 's/^/  /'
         echo
-        echo "${bold}Install Information:${normal}"
+        echo "${BOLD}Install Information:${RESET}"
         pacman -Qi "$selected_package" | grep -E "Install Reason|Install Date|Installed Size" | sed 's/^/  /'
         echo
         read -p "Press any key to return to package list... " -n 1 -s -r
@@ -923,23 +878,17 @@ browse_explicit_packages() {
     while true; do
         clear_screen
 
-        local bold=$(tput bold)
-        local cyan=$(tput setaf 6)
-        local yellow=$(tput setaf 3)
-        local red=$(tput setaf 1)
-        local normal=$(tput sgr0)
 
         local preview_width=$(get_preview_width)
-        local preview_file="$PREVIEW_WIDTH_FILE"
-        local resize_flag="$RESIZE_FLAG_FILE"
 
-        echo 0 > "$resize_flag"
+        echo 0 > "$RESIZE_FLAG_FILE"
 
-        local explicit_tmp="/tmp/spm_explicit_list_$$.tmp"
+        local explicit_tmp
+        explicit_tmp=$(mktemp /tmp/spm_explicit.XXXXXX)
         pacman -Qeq > "$explicit_tmp"
 
         while true; do
-            preview_width=$(cat "$preview_file")
+            preview_width=$(cat "$PREVIEW_WIDTH_FILE")
 
             local selected_package=$(fzf --reverse < "$explicit_tmp" \
                 --style=full:line \
@@ -949,20 +898,15 @@ browse_explicit_packages() {
                 --preview-border=line \
                 --border-label=" Explicitly Installed Packages " \
                 --preview "
-                    bold=\$(tput bold)
-                    cyan=\$(tput setaf 6)
-                    yellow=\$(tput setaf 3)
-                    red=\$(tput setaf 1)
-                    normal=\$(tput sgr0)
 
                     pkg={1}
 
-                    echo -e \"\${bold}\${cyan}\$pkg\${normal}\"
+                    echo -e \"\${BOLD}\${CYAN}\$pkg\${RESET}\"
                     echo
                     pkg_info=\$(pacman -Qi \"\$pkg\" 2>/dev/null)
                     echo \"\$pkg_info\" | grep 'Description' | cut -d':' -f2-
                     echo
-                    echo -e \"\${bold}\${yellow}Removal Impact:\${normal}\"
+                    echo -e \"\${BOLD}\${YELLOW}Removal Impact:\${RESET}\"
 
                     removal_list=\$(pacman -Rsp \"\$pkg\" 2>/dev/null)
                     removed_count=\$(echo \"\$removal_list\" | wc -l)
@@ -978,20 +922,20 @@ browse_explicit_packages() {
                     done
 
                     if [[ \"\$conflict\" == true ]]; then
-                        echo -e \"\${red}Would remove other explicit packages\${normal}\"
+                        echo -e \"\${RED}Would remove other explicit packages\${RESET}\"
                     else
-                        echo -e \"Would remove \${yellow}\$removed_count\${normal} total packages\"
+                        echo -e \"Would remove \${YELLOW}\$removed_count\${RESET} total packages\"
                     fi
                     echo
-                    echo -e \"\${bold}Dependencies to be removed:\${normal}\"
+                    echo -e \"\${BOLD}Dependencies to be removed:\${RESET}\"
                     echo \"\$removal_list\" | head -30 | sed 's/^/  /'
                     if [[ \"\$removed_count\" -gt 30 ]]; then
                         echo \"  ... and \$((\$removed_count - 30)) more\"
                     fi
                     echo
-                    echo -e \"\${bold}Installed:\${normal}\"
+                    echo -e \"\${BOLD}Installed:\${RESET}\"
                     echo \"\$pkg_info\" | grep 'Install Date' | cut -d':' -f2- | sed 's/^/  /'
-                    echo -e \"\${bold}Size:\${normal}\"
+                    echo -e \"\${BOLD}Size:\${RESET}\"
                     echo \"\$pkg_info\" | grep 'Installed Size' | cut -d':' -f2- | sed 's/^/  /'
                 " \
                 --preview-window="right:${preview_width}%:wrap" \
@@ -999,13 +943,12 @@ browse_explicit_packages() {
 Alt+[ increase preview | Alt+] decrease preview" \
                 --bind 'ctrl-c:abort' \
                 --bind 'resize:refresh-preview' \
-                --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                "${FZF_RESIZE_BINDS[@]}" \
                 --ansi)
 
             if [[ -z "$selected_package" ]]; then
-                if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
-                    echo 0 > "$resize_flag"
+                if [[ $(cat "$RESIZE_FLAG_FILE" 2>/dev/null || echo "0") -eq 1 ]]; then
+                    echo 0 > "$RESIZE_FLAG_FILE"
                     continue
                 else
                     rm -f "$explicit_tmp"
@@ -1015,10 +958,10 @@ Alt+[ increase preview | Alt+] decrease preview" \
 
             rm -f "$explicit_tmp"
             clear_screen
-            echo "${bold}${cyan}Package: $selected_package${normal}"
+            echo "${BOLD}${CYAN}Package: $selected_package${RESET}"
             echo "Description: $(pacman -Qi "$selected_package" | grep "Description" | cut -d":" -f2-)"
             echo
-            echo "${bold}${yellow}Removal Impact:${normal}"
+            echo "${BOLD}${YELLOW}Removal Impact:${RESET}"
 
             removal_list=$(pacman -Rsp "$selected_package" 2>/dev/null)
             removed_count=$(echo "$removal_list" | wc -l)
@@ -1034,16 +977,16 @@ Alt+[ increase preview | Alt+] decrease preview" \
             done
 
             if [[ "$conflict" == true ]]; then
-                echo -e "${red}Would remove other explicitly installed packages${normal}"
+                echo -e "${RED}Would remove other explicitly installed packages${RESET}"
             else
-                echo -e "Would remove ${yellow}$removed_count${normal} total packages"
+                echo -e "Would remove ${YELLOW}$removed_count${RESET} total packages"
             fi
 
             echo
-            echo "${bold}Dependencies to be removed:${normal}"
+            echo "${BOLD}Dependencies to be removed:${RESET}"
             echo "$removal_list" | sed 's/^/  /'
             echo
-            echo "${bold}Install Information:${normal}"
+            echo "${BOLD}Install Information:${RESET}"
             pacman -Qi "$selected_package" | grep -E "Install Reason|Install Date|Installed Size" | sed 's/^/  /'
             echo
             read -p "Press any key to continue or Ctrl+C to return... " -n 1 -s -r
@@ -1057,10 +1000,8 @@ dependencies_menu() {
         clear
 
         local preview_width=$(get_preview_width)
-        local preview_file="$PREVIEW_WIDTH_FILE"
-        local resize_flag="$RESIZE_FLAG_FILE"
 
-        echo 0 > "$resize_flag"
+        echo 0 > "$RESIZE_FLAG_FILE"
 
         local menu_label
         if [[ $CLI_MODE -eq 1 ]]; then
@@ -1076,7 +1017,7 @@ dependencies_menu() {
             "$menu_label"
         )
         while true; do
-            preview_width=$(cat "$preview_file")
+            preview_width=$(cat "$PREVIEW_WIDTH_FILE")
 
             local spm_header
             spm_header=$(get_spm_header)
@@ -1091,55 +1032,52 @@ dependencies_menu() {
                 --header-label=" Dependencies " \
                 --header-label-pos=0:bottom \
                 --preview '
-                    bold=$(tput bold)
-                    cyan=$(tput setaf 6)
-                    normal=$(tput sgr0)
 
                     echo
-                    echo -e "${bold}${cyan}Option Information${normal}"
+                    echo -e "${BOLD}${CYAN}Option Information${RESET}"
                     echo
                     case {} in
                         "Explore Dependencies")
-                            echo -e "${bold}Explore Dependencies${normal}"
+                            echo -e "${BOLD}Explore Dependencies${RESET}"
                             echo
                             echo "Browse dependency packages and examine relationships."
                             echo
-                            echo -e "${bold}What this does:${normal}"
+                            echo -e "${BOLD}What this does:${RESET}"
                             echo "• Lists packages installed as dependencies"
                             echo "• Shows which packages require each dependency"
                             echo "• Displays dependencies of each package"
                             echo
-                            echo -e "${bold}Use case:${normal}"
+                            echo -e "${BOLD}Use case:${RESET}"
                             echo "Understanding package dependency relationships."
                             ;;
                         "High-Impact Removals")
-                            echo -e "${bold}High-Impact Removals${normal}"
+                            echo -e "${BOLD}High-Impact Removals${RESET}"
                             echo
                             echo "Find all packages that would remove the most"
                             echo "dependencies without affecting explicitly installed packages."
                             echo
-                            echo -e "${bold}What this does:${normal}"
+                            echo -e "${BOLD}What this does:${RESET}"
                             echo "• Analyzes ALL installed packages (explicit + deps)"
                             echo "• Counts dependencies that would be removed"
                             echo "• Filters out removals affecting explicit packages"
                             echo "• Searchable and sortable by impact"
                             echo
-                            echo -e "${bold}Use case:${normal}"
+                            echo -e "${BOLD}Use case:${RESET}"
                             echo "Finding orphaned or safe-to-remove packages for cleanup."
                             ;;
                         "Browse Explicit Packages")
-                            echo -e "${bold}Browse Explicit Packages${normal}"
+                            echo -e "${BOLD}Browse Explicit Packages${RESET}"
                             echo
                             echo "Browse all explicitly installed packages and examine"
                             echo "what would be removed with each one."
                             echo
-                            echo -e "${bold}What this does:${normal}"
+                            echo -e "${BOLD}What this does:${RESET}"
                             echo "• Lists all explicitly installed packages"
                             echo "• Shows removal impact for each package"
                             echo "• Indicates if removal would affect other explicit packages"
                             echo "• Displays full removal list"
                             echo
-                            echo -e "${bold}Use case:${normal}"
+                            echo -e "${BOLD}Use case:${RESET}"
                             echo "Exploring removal options for explicit packages."
                             ;;
                         *)
@@ -1154,15 +1092,14 @@ Alt+[ increase preview | Alt+] decrease preview" \
                 --footer-border=line \
                 --bind 'ctrl-c:abort' \
                 --bind 'resize:refresh-preview' \
-                --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                "${FZF_RESIZE_BINDS[@]}" \
                 --height=100% \
                 --color=header:-1,footer:$FZF_FOOTER_COLOR \
                 --ansi)
 
             if [[ -z "$selected_option" ]]; then
-                if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
-                    echo 0 > "$resize_flag"
+                if [[ $(cat "$RESIZE_FLAG_FILE" 2>/dev/null || echo "0") -eq 1 ]]; then
+                    echo 0 > "$RESIZE_FLAG_FILE"
                     continue
                 else
                     if [[ $CLI_MODE -eq 1 ]]; then
@@ -1201,10 +1138,8 @@ Alt+[ increase preview | Alt+] decrease preview" \
 orphan() {
     while true; do
         local preview_width=$(get_preview_width)
-        local preview_file="$PREVIEW_WIDTH_FILE"
-        local resize_flag="$RESIZE_FLAG_FILE"
 
-        echo 0 > "$resize_flag"
+        echo 0 > "$RESIZE_FLAG_FILE"
 
         local menu_label
         local footer_text
@@ -1226,9 +1161,10 @@ Alt+[ increase preview | Alt+] decrease preview"
             "$menu_label"
         )
 
-        local orphan_preview="/tmp/spm_orphan_preview_$$.tmp"
-        local orphan_tmp_a="/tmp/spm_orphan_a_$$.tmp"
-        local orphan_tmp_b="/tmp/spm_orphan_b_$$.tmp"
+        local orphan_preview orphan_tmp_a orphan_tmp_b
+        orphan_preview=$(mktemp /tmp/spm_orphan_preview.XXXXXX)
+        orphan_tmp_a=$(mktemp /tmp/spm_orphan_a.XXXXXX)
+        orphan_tmp_b=$(mktemp /tmp/spm_orphan_b.XXXXXX)
 
         pacman -Qdtq 2>/dev/null > "$orphan_tmp_a" &
         local pid1=$!
@@ -1289,7 +1225,7 @@ Alt+[ increase preview | Alt+] decrease preview"
         clear
 
         while true; do
-            preview_width=$(cat "$preview_file")
+            preview_width=$(cat "$PREVIEW_WIDTH_FILE")
 
             local selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse \
                 --style=full:line \
@@ -1333,15 +1269,14 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --footer-border=line \
                 --bind 'ctrl-c:abort' \
                 --bind 'resize:refresh-preview' \
-                --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                "${FZF_RESIZE_BINDS[@]}" \
                 --height=100% \
                 --color=header:-1,footer:$FZF_FOOTER_COLOR \
                 --ansi)
 
             if [[ -z "$selected_option" ]]; then
-                if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
-                    echo 0 > "$resize_flag"
+                if [[ $(cat "$RESIZE_FLAG_FILE" 2>/dev/null || echo "0") -eq 1 ]]; then
+                    echo 0 > "$RESIZE_FLAG_FILE"
                     continue
                 else
                     if [[ $CLI_MODE -eq 1 ]]; then
@@ -1368,9 +1303,6 @@ Alt+[ increase preview | Alt+] decrease preview"
 
         local operation_cancelled=false
 
-        local bold=$(tput bold)
-        local cyan=$(tput setaf 6)
-        local normal=$(tput sgr0)
 
         case "$selected_option" in
             "All Orphans [Auto]"*)
@@ -1381,7 +1313,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 ;;
             "Orphaned Only"*)
                 if [[ -n "$orphan_data" ]]; then
-                    echo "${bold}${cyan}The following orphaned packages will be removed:${normal}"
+                    echo "${BOLD}${CYAN}The following orphaned packages will be removed:${RESET}"
                     echo "$orphan_data" | sed 's/^/  → /'
                     echo
 
@@ -1391,20 +1323,12 @@ Alt+[ increase preview | Alt+] decrease preview"
                         read -p "Do you want to proceed? [Y/n] " confirm
                         trap - INT
                     else
-                        (
-                            trap 'exit 130' INT
-                            read -p "Do you want to proceed? [Y/n] " confirm
-                            echo "$confirm" > /tmp/spm_orphan_confirm_$$
-                        )
-                        if [[ $? -eq 130 ]]; then
+                        confirm=$(spm_read_input "Do you want to proceed? [Y/n] ") || {
                             echo
                             echo "Operation cancelled. Returning to menu..."
                             sleep 1
                             operation_cancelled=true
-                        else
-                            confirm=$(cat /tmp/spm_orphan_confirm_$$ 2>/dev/null)
-                            rm -f /tmp/spm_orphan_confirm_$$
-                        fi
+                        }
                     fi
 
                     if ! $operation_cancelled; then
@@ -1425,7 +1349,7 @@ Alt+[ increase preview | Alt+] decrease preview"
             "Unneeded Only"*)
                 local unneeded="$unneeded_data"
                 if [[ -n "$unneeded" ]]; then
-                    echo "${bold}${cyan}The following unneeded packages will be removed:${normal}"
+                    echo "${BOLD}${CYAN}The following unneeded packages will be removed:${RESET}"
                     echo "$unneeded" | sed 's/^/  → /'
                     echo
 
@@ -1435,20 +1359,12 @@ Alt+[ increase preview | Alt+] decrease preview"
                         read -p "Do you want to proceed? [Y/n] " confirm
                         trap - INT
                     else
-                        (
-                            trap 'exit 130' INT
-                            read -p "Do you want to proceed? [Y/n] " confirm
-                            echo "$confirm" > /tmp/spm_orphan_confirm_$$
-                        )
-                        if [[ $? -eq 130 ]]; then
+                        confirm=$(spm_read_input "Do you want to proceed? [Y/n] ") || {
                             echo
                             echo "Operation cancelled. Returning to menu..."
                             sleep 1
                             operation_cancelled=true
-                        else
-                            confirm=$(cat /tmp/spm_orphan_confirm_$$ 2>/dev/null)
-                            rm -f /tmp/spm_orphan_confirm_$$
-                        fi
+                        }
                     fi
 
                     if ! $operation_cancelled; then
@@ -1471,7 +1387,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 local unneeded="$unneeded_data"
 
                 if [[ -n "$orphans" || -n "$unneeded" ]]; then
-                    echo "${bold}${cyan}The following packages will be removed:${normal}"
+                    echo "${BOLD}${CYAN}The following packages will be removed:${RESET}"
                     if [[ -n "$orphans" ]]; then
                         echo
                         echo "Orphaned packages:"
@@ -1490,20 +1406,12 @@ Alt+[ increase preview | Alt+] decrease preview"
                         read -p "Do you want to proceed? [Y/n] " confirm
                         trap - INT
                     else
-                        (
-                            trap 'exit 130' INT
-                            read -p "Do you want to proceed? [Y/n] " confirm
-                            echo "$confirm" > /tmp/spm_orphan_confirm_$$
-                        )
-                        if [[ $? -eq 130 ]]; then
+                        confirm=$(spm_read_input "Do you want to proceed? [Y/n] ") || {
                             echo
                             echo "Operation cancelled. Returning to menu..."
                             sleep 1
                             operation_cancelled=true
-                        else
-                            confirm=$(cat /tmp/spm_orphan_confirm_$$ 2>/dev/null)
-                            rm -f /tmp/spm_orphan_confirm_$$
-                        fi
+                        }
                     fi
 
                     if ! $operation_cancelled; then
@@ -1549,9 +1457,7 @@ downgrade() {
 
         local packages="$1"
         local preview_width=$(get_preview_width)
-        local preview_file="$PREVIEW_WIDTH_FILE"
-        local resize_flag="$RESIZE_FLAG_FILE"
-        echo 0 > "$resize_flag"
+        echo 0 > "$RESIZE_FLAG_FILE"
 
         local header_text
         if [[ $CLI_MODE -eq 1 ]]; then
@@ -1564,7 +1470,7 @@ Alt+[ increase preview | Alt+] decrease preview"
 
         if [[ -z "$packages" ]]; then
             while true; do
-                preview_width=$(cat "$preview_file")
+                preview_width=$(cat "$PREVIEW_WIDTH_FILE")
 
                 packages=$(pacman -Qq | fzf --reverse --multi \
                     --style=full:line \
@@ -1574,27 +1480,22 @@ Alt+[ increase preview | Alt+] decrease preview"
                     --preview-border=line \
                     --border-label=" Downgrade Packages " \
                     --preview '
-                        bold=$(tput bold)
-                        cyan=$(tput setaf 6)
-                        yellow=$(tput setaf 3)
-                        normal=$(tput sgr0)
 
-                        echo -e "${bold}${yellow}⬇ Downgrade: {}${normal}"
+                        echo -e "${BOLD}${YELLOW}⬇ Downgrade: {}${RESET}"
                         echo
-                        echo -e "${bold}${cyan}Current Package Version${normal}"
+                        echo -e "${BOLD}${CYAN}Current Package Version${RESET}"
                         pacman -Qi {} 2>/dev/null || echo "Package not found"
                     ' \
                     --preview-window="right:$preview_width%:wrap" \
                     --header="$header_text" \
                     --bind 'ctrl-c:abort' \
                     --bind 'resize:refresh-preview' \
-                    --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                    --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                    "${FZF_RESIZE_BINDS[@]}" \
                     --ansi)
 
                 if [[ -z "$packages" ]]; then
-                    if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
-                        echo 0 > "$resize_flag"
+                    if [[ $(cat "$RESIZE_FLAG_FILE" 2>/dev/null || echo "0") -eq 1 ]]; then
+                        echo 0 > "$RESIZE_FLAG_FILE"
                         continue
                     else
                         if [[ $CLI_MODE -eq 1 ]]; then
@@ -1612,13 +1513,8 @@ Alt+[ increase preview | Alt+] decrease preview"
         for package in $packages; do
             clear_screen
 
-            local bold=$(tput bold)
-            local cyan=$(tput setaf 6)
-            local green=$(tput setaf 2)
-            local yellow=$(tput setaf 3)
-            local normal=$(tput sgr0)
 
-            echo "${bold}${yellow}⬇ Downgrading: $package${normal}"
+            echo "${BOLD}${YELLOW}⬇ Downgrading: $package${RESET}"
             echo
 
             if ! pacman -Qi "$package" > /dev/null 2>&1; then
@@ -1628,7 +1524,7 @@ Alt+[ increase preview | Alt+] decrease preview"
             fi
 
             local current_version=$(pacman -Q "$package" 2>/dev/null | awk '{print $2}')
-            echo "${bold}Current version:${normal} ${green}$current_version${normal}"
+            echo "${BOLD}Current version:${RESET} ${GREEN}$current_version${RESET}"
             echo
             echo "Searching for available versions..."
 
@@ -1676,7 +1572,7 @@ Alt+[ increase preview | Alt+] decrease preview"
             echo
 
             while true; do
-                preview_width=$(cat "$preview_file")
+                preview_width=$(cat "$PREVIEW_WIDTH_FILE")
 
                 local selected_version=$(printf '%s\n' "${candidates[@]}" | fzf --reverse \
                     --style=full:line \
@@ -1686,30 +1582,25 @@ Alt+[ increase preview | Alt+] decrease preview"
                     --cycle \
                     --border-label=" Select Version for $package " \
                     --preview "
-                        bold=\$(tput bold)
-                        cyan=\$(tput setaf 6)
-                        green=\$(tput setaf 2)
-                        yellow=\$(tput setaf 3)
-                        normal=\$(tput sgr0)
 
-                        echo -e \"\${bold}\${yellow}⬇ Downgrading: $package\${normal}\"
+                        echo -e \"\${BOLD}\${YELLOW}⬇ Downgrading: $package\${RESET}\"
                         echo
-                        echo -e \"\${bold}Current version:\${normal} \${green}$current_version\${normal}\"
+                        echo -e \"\${BOLD}Current version:\${RESET} \${GREEN}$current_version\${RESET}\"
                         echo
-                        echo -e \"\${bold}\${cyan}Selected Version\${normal}\"
+                        echo -e \"\${BOLD}\${CYAN}Selected Version\${RESET}\"
 
                         version={}
                         if [[ \$version == ALA:* ]]; then
                             version=\${version#ALA:}
-                            echo -e \"\${bold}Source:\${normal} Arch Linux Archive\"
-                            echo -e \"\${bold}File:\${normal} \$version\"
+                            echo -e \"\${BOLD}Source:\${RESET} Arch Linux Archive\"
+                            echo -e \"\${BOLD}File:\${RESET} \$version\"
                             echo
                             echo \"This version will be downloaded before installation.\"
                         else
-                            echo -e \"\${bold}Source:\${normal} Local cache\"
-                            echo -e \"\${bold}Location:\${normal} \$version\"
+                            echo -e \"\${BOLD}Source:\${RESET} Local cache\"
+                            echo -e \"\${BOLD}Location:\${RESET} \$version\"
                             echo
-                            echo -e \"\${bold}Package Information:\${normal}\"
+                            echo -e \"\${BOLD}Package Information:\${RESET}\"
                             pacman -Qip \"\$version\" 2>/dev/null || echo 'Details not available'
                         fi
                     " \
@@ -1718,13 +1609,12 @@ Alt+[ increase preview | Alt+] decrease preview"
 Alt+[ increase preview | Alt+] decrease preview" \
                     --bind 'ctrl-c:abort' \
                     --bind 'resize:refresh-preview' \
-                    --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                    --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                    "${FZF_RESIZE_BINDS[@]}" \
                     --ansi)
 
                 if [[ -z "$selected_version" ]]; then
-                    if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
-                        echo 0 > "$resize_flag"
+                    if [[ $(cat "$RESIZE_FLAG_FILE" 2>/dev/null || echo "0") -eq 1 ]]; then
+                        echo 0 > "$RESIZE_FLAG_FILE"
                         continue
                     else
                         echo "No version selected for $package. Skipping..."
@@ -1753,7 +1643,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
 
                             if [[ $install_result -eq 0 ]]; then
                                 echo
-                                echo "${bold}${green}✓${normal} Downgrade completed for $package."
+                                echo "${BOLD}${GREEN}✓${RESET} Downgrade completed for $package."
                             else
                                 echo
                                 echo "Downgrade failed for $package."
@@ -1772,7 +1662,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
 
                     if [[ $? -eq 0 ]]; then
                         echo
-                        echo "${bold}${green}✓${normal} Downgrade completed for $package."
+                        echo "${BOLD}${GREEN}✓${RESET} Downgrade completed for $package."
                     else
                         echo
                         echo "Downgrade failed for $package."
@@ -1806,10 +1696,8 @@ Alt+[ increase preview | Alt+] decrease preview" \
 clear_cache() {
     while true; do
         local preview_width=$(get_preview_width)
-        local preview_file="$PREVIEW_WIDTH_FILE"
-        local resize_flag="$RESIZE_FLAG_FILE"
 
-        echo 0 > "$resize_flag"
+        echo 0 > "$RESIZE_FLAG_FILE"
 
         local menu_label
         local footer_text
@@ -1837,7 +1725,7 @@ Alt+[ increase preview | Alt+] decrease preview"
         clear
 
         while true; do
-            preview_width=$(cat "$preview_file")
+            preview_width=$(cat "$PREVIEW_WIDTH_FILE")
 
             local selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse \
                 --style=full:line \
@@ -1898,15 +1786,14 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --footer-border=line \
                 --bind 'ctrl-c:abort' \
                 --bind 'resize:refresh-preview' \
-                --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                "${FZF_RESIZE_BINDS[@]}" \
                 --height=100% \
                 --color=header:-1,footer:$FZF_FOOTER_COLOR \
                 --ansi)
 
             if [[ -z "$selected_option" ]]; then
-                if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
-                    echo 0 > "$resize_flag"
+                if [[ $(cat "$RESIZE_FLAG_FILE" 2>/dev/null || echo "0") -eq 1 ]]; then
+                    echo 0 > "$RESIZE_FLAG_FILE"
                     continue
                 else
                     if [[ $CLI_MODE -eq 1 ]]; then
@@ -1941,20 +1828,12 @@ Alt+[ increase preview | Alt+] decrease preview"
                     read -p "This will remove ALL cached packages including latest versions. Continue? [y/N] " confirm
                     trap - INT
                 else
-                    (
-                        trap 'exit 130' INT
-                        read -p "This will remove ALL cached packages including latest versions. Continue? [y/N] " confirm
-                        echo "$confirm" > /tmp/spm_cache_confirm_$$
-                    )
-                    if [[ $? -eq 130 ]]; then
+                    confirm=$(spm_read_input "This will remove ALL cached packages including latest versions. Continue? [y/N] ") || {
                         echo
                         echo "Operation cancelled. Returning to menu..."
                         sleep 1
                         operation_cancelled=true
-                    else
-                        confirm=$(cat /tmp/spm_cache_confirm_$$ 2>/dev/null)
-                        rm -f /tmp/spm_cache_confirm_$$
-                    fi
+                    }
                 fi
 
                 if ! $operation_cancelled; then
@@ -2009,10 +1888,8 @@ pacnew_pacsave_manager() {
         clear
 
         local preview_width=$(get_preview_width)
-        local preview_file="$PREVIEW_WIDTH_FILE"
-        local resize_flag="$RESIZE_FLAG_FILE"
 
-        echo 0 > "$resize_flag"
+        echo 0 > "$RESIZE_FLAG_FILE"
 
         local menu_label
         local footer_text
@@ -2076,7 +1953,7 @@ Alt+[ increase preview | Alt+] decrease preview"
         fi
 
         while true; do
-            preview_width=$(cat "$preview_file")
+            preview_width=$(cat "$PREVIEW_WIDTH_FILE")
 
             local selected=$(echo "$file_list" | fzf --reverse \
                 --style=full:line \
@@ -2088,58 +1965,53 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --header-label=" Pacnew/Pacsave Manager " \
                 --header-label-pos=0:bottom \
                 --preview '
-                    bold=$(tput bold)
-                    cyan=$(tput setaf 6)
-                    green=$(tput setaf 2)
-                    yellow=$(tput setaf 3)
-                    normal=$(tput sgr0)
 
                     echo
                     selection="{}"
 
                     if [[ "$selection" == "← Menu" || "$selection" == "← Exit" ]]; then
-                        echo -e "${bold}${cyan}Return to Menu${normal}"
+                        echo -e "${BOLD}${CYAN}Return to Menu${RESET}"
                         echo
                         echo "Go back to the main SPM menu."
                         exit 0
                     fi
 
                     if [[ "$selection" == "[BULK] Delete All Pacnew"* ]]; then
-                        echo -e "${bold}${cyan}Bulk Action: Delete All Pacnew${normal}"
+                        echo -e "${BOLD}${CYAN}Bulk Action: Delete All Pacnew${RESET}"
                         echo
-                        echo -e "${bold}${yellow}This will delete all .pacnew files,${normal}"
-                        echo -e "${bold}${yellow}keeping your current configurations.${normal}"
+                        echo -e "${BOLD}${YELLOW}This will delete all .pacnew files,${RESET}"
+                        echo -e "${BOLD}${YELLOW}keeping your current configurations.${RESET}"
                         echo
                         echo "Use this when you want to keep your existing configs"
                         echo "and discard the new package defaults."
                         echo
-                        echo -e "${bold}Files that will be deleted:${normal}"
+                        echo -e "${BOLD}Files that will be deleted:${RESET}"
                         sudo find /etc -name "*.pacnew" 2>/dev/null | head -20
                         exit 0
                     fi
 
                     if [[ "$selection" == "[BULK] Apply All Pacnew"* ]]; then
-                        echo -e "${bold}${cyan}Bulk Action: Apply All Pacnew${normal}"
+                        echo -e "${BOLD}${CYAN}Bulk Action: Apply All Pacnew${RESET}"
                         echo
-                        echo -e "${bold}${yellow}This will replace all current configs${normal}"
-                        echo -e "${bold}${yellow}with their .pacnew versions.${normal}"
+                        echo -e "${BOLD}${YELLOW}This will replace all current configs${RESET}"
+                        echo -e "${BOLD}${YELLOW}with their .pacnew versions.${RESET}"
                         echo
-                        echo -e "${bold}WARNING:${normal} Your current configurations will be overwritten!"
+                        echo -e "${BOLD}WARNING:${RESET} Your current configurations will be overwritten!"
                         echo
-                        echo -e "${bold}Files that will be replaced:${normal}"
+                        echo -e "${BOLD}Files that will be replaced:${RESET}"
                         sudo find /etc -name "*.pacnew" 2>/dev/null | sed "s/.pacnew$//" | head -20
                         exit 0
                     fi
 
                     if [[ "$selection" == "[BULK] Delete All Pacsave"* ]]; then
-                        echo -e "${bold}${cyan}Bulk Action: Delete All Pacsave${normal}"
+                        echo -e "${BOLD}${CYAN}Bulk Action: Delete All Pacsave${RESET}"
                         echo
-                        echo -e "${bold}${green}This will delete all .pacsave backup files.${normal}"
+                        echo -e "${BOLD}${GREEN}This will delete all .pacsave backup files.${RESET}"
                         echo
                         echo "Use this to clean up old configuration backups"
                         echo "that were preserved when packages were removed."
                         echo
-                        echo -e "${bold}Files that will be deleted:${normal}"
+                        echo -e "${BOLD}Files that will be deleted:${RESET}"
                         sudo find /etc -name "*.pacsave" 2>/dev/null | head -20
                         exit 0
                     fi
@@ -2148,26 +2020,26 @@ Alt+[ increase preview | Alt+] decrease preview"
 
                     if [[ "$file" == *.pacnew ]]; then
                         original="${file%.pacnew}"
-                        echo -e "${bold}${cyan}Pacnew File${normal}"
+                        echo -e "${BOLD}${CYAN}Pacnew File${RESET}"
                         echo
-                        echo -e "${bold}Original:${normal} $original"
-                        echo -e "${bold}New:${normal} $file"
+                        echo -e "${BOLD}Original:${RESET} $original"
+                        echo -e "${BOLD}New:${RESET} $file"
                         echo
-                        echo -e "${bold}${yellow}A new version of this config was installed.${normal}"
+                        echo -e "${BOLD}${YELLOW}A new version of this config was installed.${RESET}"
                         echo "Review the differences and decide which to keep."
                     else
                         original="${file%.pacsave}"
-                        echo -e "${bold}${cyan}Pacsave File${normal}"
+                        echo -e "${BOLD}${CYAN}Pacsave File${RESET}"
                         echo
-                        echo -e "${bold}Current:${normal} $original"
-                        echo -e "${bold}Backup:${normal} $file"
+                        echo -e "${BOLD}Current:${RESET} $original"
+                        echo -e "${BOLD}Backup:${RESET} $file"
                         echo
-                        echo -e "${bold}${green}Your config was preserved during package removal.${normal}"
+                        echo -e "${BOLD}${GREEN}Your config was preserved during package removal.${RESET}"
                         echo "The backup contains your old configuration."
                     fi
 
                     echo
-                    echo -e "${bold}=== DIFFERENCES ===${normal}"
+                    echo -e "${BOLD}=== DIFFERENCES ===${RESET}"
                     echo
 
                     if [[ -f "$original" && -f "$file" ]]; then
@@ -2181,7 +2053,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     elif [[ ! -f "$original" ]]; then
                         echo "Original file does not exist."
                         echo
-                        echo -e "${bold}New file contents:${normal}"
+                        echo -e "${BOLD}New file contents:${RESET}"
                         head -50 "$file" 2>/dev/null
                     else
                         echo "Cannot compare files."
@@ -2193,15 +2065,14 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --footer-border=line \
                 --bind 'ctrl-c:abort' \
                 --bind 'resize:refresh-preview' \
-                --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                "${FZF_RESIZE_BINDS[@]}" \
                 --height=100% \
                 --color=header:-1,footer:$FZF_FOOTER_COLOR \
                 --ansi)
 
             if [[ -z "$selected" ]]; then
-                if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
-                    echo 0 > "$resize_flag"
+                if [[ $(cat "$RESIZE_FLAG_FILE" 2>/dev/null || echo "0") -eq 1 ]]; then
+                    echo 0 > "$RESIZE_FLAG_FILE"
                     continue
                 else
                     if [[ $CLI_MODE -eq 1 ]]; then
@@ -2312,34 +2183,28 @@ Alt+[ increase preview | Alt+] decrease preview"
 
         clear_screen
 
-        local bold=$(tput bold)
-        local cyan=$(tput setaf 6)
-        local yellow=$(tput setaf 3)
-        local green=$(tput setaf 2)
-        local red=$(tput setaf 1)
-        local normal=$(tput sgr0)
 
         if [[ "$file_type" == "pacnew" ]]; then
-            echo "${bold}${cyan}Pacnew File: $original${normal}"
+            echo "${BOLD}${CYAN}Pacnew File: $original${RESET}"
             echo
             echo "A package update provided a new default version of this config file."
             echo "Your current config was left untouched, and the new default was saved as:"
-            echo "  ${yellow}$file${normal}"
+            echo "  ${YELLOW}$file${RESET}"
             echo
-            echo "${bold}YOUR config:${normal}     $original"
-            echo "${bold}PACKAGE config:${normal}  $file"
+            echo "${BOLD}YOUR config:${RESET}     $original"
+            echo "${BOLD}PACKAGE config:${RESET}  $file"
         else
-            echo "${bold}${cyan}Pacsave File: $original${normal}"
+            echo "${BOLD}${CYAN}Pacsave File: $original${RESET}"
             echo
             echo "A package was removed and your custom config was backed up as:"
-            echo "  ${yellow}$file${normal}"
+            echo "  ${YELLOW}$file${RESET}"
             echo
-            echo "${bold}CURRENT file:${normal}  $original"
-            echo "${bold}YOUR backup:${normal}   $file"
+            echo "${BOLD}CURRENT file:${RESET}  $original"
+            echo "${BOLD}YOUR backup:${RESET}   $file"
         fi
 
         echo
-        echo "${bold}=== DIFFERENCES ===${normal}"
+        echo "${BOLD}=== DIFFERENCES ===${RESET}"
         echo
 
         if [[ -f "$original" && -f "$file" ]]; then
@@ -2358,31 +2223,31 @@ Alt+[ increase preview | Alt+] decrease preview"
 
         echo
         if [[ "$file_type" == "pacnew" ]]; then
-            echo "${bold}What do you want to do?${normal}"
+            echo "${BOLD}What do you want to do?${RESET}"
             echo
-            echo "  ${bold}${green}1) Keep YOUR config${normal}  - Discard the new package default"
+            echo "  ${BOLD}${GREEN}1) Keep YOUR config${RESET}  - Discard the new package default"
             echo "     Deletes ${file##*/}, no changes to your config"
             echo
-            echo "  ${bold}${yellow}2) Use PACKAGE config${normal}  - Replace your config with the new default"
+            echo "  ${BOLD}${YELLOW}2) Use PACKAGE config${RESET}  - Replace your config with the new default"
             echo "     Overwrites $original with the package version"
             echo
-            echo "  ${bold}${cyan}3) Merge manually${normal}  - Open both files side-by-side in a diff editor"
+            echo "  ${BOLD}${CYAN}3) Merge manually${RESET}  - Open both files side-by-side in a diff editor"
             echo "     Lets you pick and choose changes from each file"
             echo
-            echo "  ${bold}4) Skip${normal}  - Do nothing for now"
+            echo "  ${BOLD}4) Skip${RESET}  - Do nothing for now"
         else
-            echo "${bold}What do you want to do?${normal}"
+            echo "${BOLD}What do you want to do?${RESET}"
             echo
-            echo "  ${bold}${green}1) Keep current file${normal}  - Delete the old backup"
+            echo "  ${BOLD}${GREEN}1) Keep current file${RESET}  - Delete the old backup"
             echo "     Deletes ${file##*/}"
             echo
-            echo "  ${bold}${yellow}2) Restore YOUR backup${normal}  - Replace current file with your saved config"
+            echo "  ${BOLD}${YELLOW}2) Restore YOUR backup${RESET}  - Replace current file with your saved config"
             echo "     Overwrites $original with your backup"
             echo
-            echo "  ${bold}${cyan}3) Merge manually${normal}  - Open both files side-by-side in a diff editor"
+            echo "  ${BOLD}${CYAN}3) Merge manually${RESET}  - Open both files side-by-side in a diff editor"
             echo "     Lets you pick and choose changes from each file"
             echo
-            echo "  ${bold}4) Skip${normal}  - Do nothing for now"
+            echo "  ${BOLD}4) Skip${RESET}  - Do nothing for now"
         fi
         echo
 
@@ -2393,17 +2258,17 @@ Alt+[ increase preview | Alt+] decrease preview"
             1)
                 sudo rm "$file"
                 if [[ "$file_type" == "pacnew" ]]; then
-                    echo "${green}Kept your config.${normal} Deleted ${file##*/}"
+                    echo "${GREEN}Kept your config.${RESET} Deleted ${file##*/}"
                 else
-                    echo "${green}Kept current file.${normal} Deleted backup ${file##*/}"
+                    echo "${GREEN}Kept current file.${RESET} Deleted backup ${file##*/}"
                 fi
                 ;;
             2)
                 sudo mv "$file" "$original"
                 if [[ "$file_type" == "pacnew" ]]; then
-                    echo "${yellow}Replaced your config with the package default.${normal}"
+                    echo "${YELLOW}Replaced your config with the package default.${RESET}"
                 else
-                    echo "${yellow}Restored your backup to $original${normal}"
+                    echo "${YELLOW}Restored your backup to $original${RESET}"
                 fi
                 ;;
             3)
@@ -2444,10 +2309,8 @@ hook_manager() {
         clear
 
         local preview_width=$(get_preview_width)
-        local preview_file="$PREVIEW_WIDTH_FILE"
-        local resize_flag="$RESIZE_FLAG_FILE"
 
-        echo 0 > "$resize_flag"
+        echo 0 > "$RESIZE_FLAG_FILE"
 
         local menu_label
         local footer_text
@@ -2492,7 +2355,7 @@ Alt+[ increase preview | Alt+] decrease preview"
         hook_list=$(printf '%s\n%s' "$hook_list" "$menu_label")
 
         while true; do
-            preview_width=$(cat "$preview_file")
+            preview_width=$(cat "$PREVIEW_WIDTH_FILE")
 
             local selected=$(echo "$hook_list" | fzf --reverse \
                 --style=full:line \
@@ -2504,25 +2367,20 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --header-label=" Hook Manager " \
                 --header-label-pos=0:bottom \
                 --preview '
-                    bold=$(tput bold)
-                    cyan=$(tput setaf 6)
-                    green=$(tput setaf 2)
-                    yellow=$(tput setaf 3)
-                    normal=$(tput sgr0)
 
                     echo
                     case {} in
                         "← Menu"|"← Exit")
-                            echo -e "${bold}${cyan}Return to Menu${normal}"
+                            echo -e "${BOLD}${CYAN}Return to Menu${RESET}"
                             echo
                             echo "Go back to the main SPM menu."
                             ;;
                         "[+] Create New Hook")
-                            echo -e "${bold}${cyan}Create New Hook${normal}"
+                            echo -e "${BOLD}${CYAN}Create New Hook${RESET}"
                             echo
                             echo "Create a new ALPM hook in /etc/pacman.d/hooks/"
                             echo
-                            echo -e "${bold}Hook Structure:${normal}"
+                            echo -e "${BOLD}Hook Structure:${RESET}"
                             echo "[Trigger]"
                             echo "Operation = Install|Upgrade|Remove"
                             echo "Type = Package|Path|File"
@@ -2534,31 +2392,31 @@ Alt+[ increase preview | Alt+] decrease preview"
                             ;;
                         "[USER] [DISABLED]"*)
                             name=$(echo {} | sed "s/\[USER\] \[DISABLED\] //")
-                            echo -e "${bold}${yellow}[USER] [DISABLED]${normal}"
-                            echo -e "${bold}Location:${normal} /etc/pacman.d/hooks/$name"
-                            echo -e "${bold}Editable:${normal} Yes"
+                            echo -e "${BOLD}${YELLOW}[USER] [DISABLED]${RESET}"
+                            echo -e "${BOLD}Location:${RESET} /etc/pacman.d/hooks/$name"
+                            echo -e "${BOLD}Editable:${RESET} Yes"
                             echo
-                            echo -e "${bold}=== HOOK CONTENT ===${normal}"
+                            echo -e "${BOLD}=== HOOK CONTENT ===${RESET}"
                             echo
                             cat "/etc/pacman.d/hooks/$name" 2>/dev/null
                             ;;
                         "[USER] [ENABLED]"*)
                             name=$(echo {} | sed "s/\[USER\] \[ENABLED\] //")
-                            echo -e "${bold}${green}[USER] [ENABLED]${normal}"
-                            echo -e "${bold}Location:${normal} /etc/pacman.d/hooks/$name"
-                            echo -e "${bold}Editable:${normal} Yes"
+                            echo -e "${BOLD}${GREEN}[USER] [ENABLED]${RESET}"
+                            echo -e "${BOLD}Location:${RESET} /etc/pacman.d/hooks/$name"
+                            echo -e "${BOLD}Editable:${RESET} Yes"
                             echo
-                            echo -e "${bold}=== HOOK CONTENT ===${normal}"
+                            echo -e "${BOLD}=== HOOK CONTENT ===${RESET}"
                             echo
                             cat "/etc/pacman.d/hooks/$name" 2>/dev/null
                             ;;
                         "[SYSTEM]"*)
                             name=$(echo {} | sed "s/\[SYSTEM\] //")
-                            echo -e "${bold}${cyan}[SYSTEM]${normal}"
-                            echo -e "${bold}Location:${normal} /usr/share/libalpm/hooks/$name"
-                            echo -e "${bold}Editable:${normal} No (package-provided)"
+                            echo -e "${BOLD}${CYAN}[SYSTEM]${RESET}"
+                            echo -e "${BOLD}Location:${RESET} /usr/share/libalpm/hooks/$name"
+                            echo -e "${BOLD}Editable:${RESET} No (package-provided)"
                             echo
-                            echo -e "${bold}=== HOOK CONTENT ===${normal}"
+                            echo -e "${BOLD}=== HOOK CONTENT ===${RESET}"
                             echo
                             cat "/usr/share/libalpm/hooks/$name" 2>/dev/null
                             ;;
@@ -2570,15 +2428,14 @@ Alt+[ increase preview | Alt+] decrease preview"
                 --footer-border=line \
                 --bind 'ctrl-c:abort' \
                 --bind 'resize:refresh-preview' \
-                --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                "${FZF_RESIZE_BINDS[@]}" \
                 --height=100% \
                 --color=header:-1,footer:$FZF_FOOTER_COLOR \
                 --ansi)
 
             if [[ -z "$selected" ]]; then
-                if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
-                    echo 0 > "$resize_flag"
+                if [[ $(cat "$RESIZE_FLAG_FILE" 2>/dev/null || echo "0") -eq 1 ]]; then
+                    echo 0 > "$RESIZE_FLAG_FILE"
                     continue
                 else
                     if [[ $CLI_MODE -eq 1 ]]; then
@@ -2827,20 +2684,22 @@ edit_pacman_option() {
     echo
     echo "For multiple values, separate them with spaces."
 
+    local _edit_tmp
+    _edit_tmp=$(mktemp /tmp/spm_pacman_edit.XXXXXX)
     (
         trap 'exit 130' INT
         read -e -i "$current_value" -p "Enter new value or press Enter to keep current: " new_value
-        echo "$new_value" > /tmp/spm_pacman_edit_$$
+        echo "$new_value" > "$_edit_tmp"
     )
     if [[ $? -eq 130 ]]; then
         echo
         echo "Operation cancelled."
-        rm -f /tmp/spm_pacman_edit_$$
+        rm -f "$_edit_tmp"
         sleep 1
         return
     fi
-    new_value=$(cat /tmp/spm_pacman_edit_$$ 2>/dev/null)
-    rm -f /tmp/spm_pacman_edit_$$
+    new_value=$(cat "$_edit_tmp" 2>/dev/null)
+    rm -f "$_edit_tmp"
 
     if [[ -n "$new_value" && "$new_value" != "$current_value" ]]; then
         new_value_escaped=$(echo "$new_value" | sed 's/[\/&]/\\&/g')
@@ -2882,20 +2741,12 @@ toggle_pacman_option_with_confirmation() {
     echo
 
     local confirm
-    (
-        trap 'exit 130' INT
-        read -p "Do you want to $new_status $option? [y/N] " confirm
-        echo "$confirm" > /tmp/spm_pacman_toggle_$$
-    )
-    if [[ $? -eq 130 ]]; then
+    confirm=$(spm_read_input "Do you want to $new_status $option? [y/N] ") || {
         echo
         echo "Operation cancelled."
-        rm -f /tmp/spm_pacman_toggle_$$
         sleep 1
         return
-    fi
-    confirm=$(cat /tmp/spm_pacman_toggle_$$ 2>/dev/null)
-    rm -f /tmp/spm_pacman_toggle_$$
+    }
 
     if [[ $confirm =~ ^[Yy]$ ]]; then
         if [[ "$new_status" == "enable" ]]; then
@@ -2996,20 +2847,12 @@ add_repository() {
     echo "------------------"
     echo
 
-    (
-        trap 'exit 130' INT
-        read -p "Enter the name of the new repository: " repo_name
-        echo "$repo_name" > /tmp/spm_repo_name_$$
-    )
-    if [[ $? -eq 130 ]]; then
+    repo_name=$(spm_read_input "Enter the name of the new repository: ") || {
         echo
         echo "Operation cancelled."
-        rm -f /tmp/spm_repo_name_$$
         sleep 1
         return
-    fi
-    repo_name=$(cat /tmp/spm_repo_name_$$ 2>/dev/null)
-    rm -f /tmp/spm_repo_name_$$
+    }
 
     if [[ -z "$repo_name" ]]; then
         echo "Repository name cannot be empty."
@@ -3023,20 +2866,12 @@ add_repository() {
         return
     fi
 
-    (
-        trap 'exit 130' INT
-        read -p "Enter the server URL for the repository: " server_url
-        echo "$server_url" > /tmp/spm_repo_url_$$
-    )
-    if [[ $? -eq 130 ]]; then
+    server_url=$(spm_read_input "Enter the server URL for the repository: ") || {
         echo
         echo "Operation cancelled."
-        rm -f /tmp/spm_repo_url_$$
         sleep 1
         return
-    fi
-    server_url=$(cat /tmp/spm_repo_url_$$ 2>/dev/null)
-    rm -f /tmp/spm_repo_url_$$
+    }
 
     if [[ -z "$server_url" ]]; then
         echo "Server URL cannot be empty."
@@ -3124,15 +2959,13 @@ Alt+[ increase preview | Alt+] decrease preview"
         options+=("$menu_label")
 
         local preview_width=$(get_preview_width)
-        local preview_file="$PREVIEW_WIDTH_FILE"
-        local resize_flag="$RESIZE_FLAG_FILE"
 
-        echo 0 > "$resize_flag"
+        echo 0 > "$RESIZE_FLAG_FILE"
 
         export -f get_option_description
 
         while true; do
-            preview_width=$(cat "$preview_file")
+            preview_width=$(cat "$PREVIEW_WIDTH_FILE")
 
             local selected_option=$(printf '%s\n' "${options[@]}" |
                 fzf --reverse \
@@ -3144,35 +2977,30 @@ Alt+[ increase preview | Alt+] decrease preview"
                     --header-label-pos=0:bottom \
                     --header-border=line \
                     --preview '
-                        bold=$(tput bold)
-                        cyan=$(tput setaf 6)
-                        green=$(tput setaf 2)
-                        yellow=$(tput setaf 3)
-                        normal=$(tput sgr0)
 
                         echo
                         opt=$(echo {} | sed "s/^\[[^]]*\] //")
 
-                        echo -e "${bold}${cyan}Pacman Configuration${normal}"
+                        echo -e "${BOLD}${CYAN}Pacman Configuration${RESET}"
                         echo
 
                         current_val=""
                         if grep -q "^$opt" /etc/pacman.conf 2>/dev/null; then
                             current_val=$(grep "^$opt" /etc/pacman.conf | sed "s/.*=//; s/^[[:space:]]*//" | tail -n 1)
                             current_val="${current_val:-Enabled - no value}"
-                            echo -e "${bold}${green}Status: ENABLED${normal}"
+                            echo -e "${BOLD}${GREEN}Status: ENABLED${RESET}"
                         elif grep -q "^#$opt" /etc/pacman.conf 2>/dev/null; then
                             current_val="Disabled - commented out"
-                            echo -e "${bold}${yellow}Status: DISABLED${normal}"
+                            echo -e "${BOLD}${YELLOW}Status: DISABLED${RESET}"
                         else
                             current_val="Not set"
-                            echo -e "${bold}Status: NOT SET${normal}"
+                            echo -e "${BOLD}Status: NOT SET${RESET}"
                         fi
 
-                        echo -e "${bold}Option:${normal} $opt"
-                        echo -e "${bold}Current Value:${normal} $current_val"
+                        echo -e "${BOLD}Option:${RESET} $opt"
+                        echo -e "${BOLD}Current Value:${RESET} $current_val"
                         echo
-                        echo -e "${bold}Description:${normal}"
+                        echo -e "${BOLD}Description:${RESET}"
                         get_option_description "$opt"
                         echo
                         echo "Pacman Configuration Summary:"
@@ -3185,15 +3013,14 @@ Alt+[ increase preview | Alt+] decrease preview"
                     --footer-border=line \
                     --bind 'ctrl-c:abort' \
                     --bind 'resize:refresh-preview' \
-                    --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                    --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                    "${FZF_RESIZE_BINDS[@]}" \
                     --height=100% \
                     --color=header:-1,footer:$FZF_FOOTER_COLOR \
                     --ansi)
 
             if [[ -z "$selected_option" ]]; then
-                if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
-                    echo 0 > "$resize_flag"
+                if [[ $(cat "$RESIZE_FLAG_FILE" 2>/dev/null || echo "0") -eq 1 ]]; then
+                    echo 0 > "$RESIZE_FLAG_FILE"
                     continue
                 else
                     if [[ $CLI_MODE -eq 1 ]]; then
@@ -3240,10 +3067,8 @@ Alt+[ increase preview | Alt+] decrease preview"
 system_tools_menu() {
     while true; do
         local preview_width=$(get_preview_width)
-        local preview_file="$PREVIEW_WIDTH_FILE"
-        local resize_flag="$RESIZE_FLAG_FILE"
 
-        echo 0 > "$resize_flag"
+        echo 0 > "$RESIZE_FLAG_FILE"
 
         local options=(
             "Dependencies"
@@ -3259,7 +3084,7 @@ system_tools_menu() {
         clear
 
         while true; do
-            preview_width=$(cat "$preview_file")
+            preview_width=$(cat "$PREVIEW_WIDTH_FILE")
 
             local selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse \
                 --style=full:line \
@@ -3313,15 +3138,14 @@ Alt+[ increase preview | Alt+] decrease preview" \
                 --footer-border=line \
                 --bind 'ctrl-c:abort' \
                 --bind 'resize:refresh-preview' \
-                --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                "${FZF_RESIZE_BINDS[@]}" \
                 --height=100% \
                 --color=header:-1,footer:$FZF_FOOTER_COLOR \
                 --ansi)
 
             if [[ -z "$selected_option" ]]; then
-                if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
-                    echo 0 > "$resize_flag"
+                if [[ $(cat "$RESIZE_FLAG_FILE" 2>/dev/null || echo "0") -eq 1 ]]; then
+                    echo 0 > "$RESIZE_FLAG_FILE"
                     continue
                 else
                     return
@@ -3354,11 +3178,10 @@ manager() {
     )
     local preview_width
     local selected_option
-    local preview_file="$PREVIEW_WIDTH_FILE"
-    local resize_flag="$RESIZE_FLAG_FILE"
-    local recent_updated="/tmp/spm_recent_updated_$$.tmp"
-    local recent_installed="/tmp/spm_recent_installed_$$.tmp"
-    local recent_removed="/tmp/spm_recent_removed_$$.tmp"
+    local recent_updated recent_installed recent_removed
+    recent_updated=$(mktemp /tmp/spm_recent_updated.XXXXXX)
+    recent_installed=$(mktemp /tmp/spm_recent_installed.XXXXXX)
+    recent_removed=$(mktemp /tmp/spm_recent_removed.XXXXXX)
 
     exit_script() {
         rm -f "$recent_updated" "$recent_installed" "$recent_removed"
@@ -3368,7 +3191,7 @@ manager() {
     }
 
     while true; do
-        echo 0 > "$resize_flag"
+        echo 0 > "$RESIZE_FLAG_FILE"
 
         tac /var/log/pacman.log 2>/dev/null | awk '
             /\[ALPM\] upgraded/ { gsub(/[()]/, "", $4); if (!up[$4]++) { print $4; if (++c >= 50) exit } }' > "$recent_updated"
@@ -3384,7 +3207,7 @@ manager() {
         clear
 
         while true; do
-            preview_width=$(cat "$preview_file")
+            preview_width=$(cat "$PREVIEW_WIDTH_FILE")
 
             selected_option=$(printf '%s\n' "${options[@]}" | fzf --reverse \
                 --style=full:line \
@@ -3416,15 +3239,14 @@ Alt+[ increase preview | Alt+] decrease preview" \
                 --footer-border=line \
                 --bind 'ctrl-c:abort' \
                 --bind 'resize:refresh-preview' \
-                --bind "alt-[:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width + 10)); [ \$new_width -gt 90 ] && new_width=90; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
-                --bind "alt-]:execute-silent(new_width=\$(cat $preview_file); new_width=\$((new_width - 10)); [ \$new_width -lt 10 ] && new_width=10; echo \$new_width > $preview_file; echo 1 > $resize_flag)+abort" \
+                "${FZF_RESIZE_BINDS[@]}" \
                 --height=100% \
                 --color=header:-1,footer:$FZF_FOOTER_COLOR \
                 --ansi)
 
             if [[ -z "$selected_option" ]]; then
-                if [[ $(cat "$resize_flag" 2>/dev/null || echo "0") -eq 1 ]]; then
-                    echo 0 > "$resize_flag"
+                if [[ $(cat "$RESIZE_FLAG_FILE" 2>/dev/null || echo "0") -eq 1 ]]; then
+                    echo 0 > "$RESIZE_FLAG_FILE"
                     continue
                 else
                     exit_script
