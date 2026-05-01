@@ -440,6 +440,7 @@ install() {
                 --preview "
 
                     pkg_name=\$(echo {} | awk '{print \$1}')
+                    pkg_repo=\$(echo {} | awk '{print (\$2 == \"aur\") ? \"aur\" : \$3}')
 
                     if pacman -Qi \$pkg_name &>/dev/null; then
                         echo -e \"\${BOLD}\${GREEN}● Package Status: INSTALLED\${RESET}\"
@@ -453,7 +454,13 @@ install() {
                         echo -e \"\${BOLD}\${YELLOW}○ Package Status: NOT INSTALLED\${RESET}\"
                         echo
                         echo -e \"\${BOLD}\${CYAN}Package Information\${RESET}\"
-                        yay -Si \$pkg_name
+                        if [[ \$pkg_repo == aur ]]; then
+                            yay -Si aur/\$pkg_name
+                            echo
+                            echo -e \"\${BOLD}\${YELLOW}File list available after installation.\${RESET}\"
+                        else
+                            pacman -Si \$pkg_repo/\$pkg_name
+                        fi
                     fi
                 " \
                 --preview-window="right:$preview_width%:wrap" \
