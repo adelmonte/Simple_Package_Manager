@@ -1,5 +1,5 @@
 pkgname=spm-arch
-pkgver=2.8
+pkgver=2.9
 pkgrel=1
 pkgdesc="Simple Package Manager - Interactive fzf tui for Arch package management"
 arch=('any')
@@ -10,7 +10,7 @@ provides=('spm')
 conflicts=('spm')
 install=spm.install
 source=("$pkgname-$pkgver.tar.gz::$url/releases/download/v$pkgver/spm-$pkgver.tar.gz")
-sha256sums=('aa91dcdc4c169db9f03f438f27c7366c5a81ae6cbed5c2a4c3cc268be21b7878')
+sha256sums=('28887c288161f56c387c429f3e95dc9265123dd8605e7caa872b878bac57b53c')
 
 package() {
     cd "$srcdir/Simple_Package_Manager-$pkgver"
