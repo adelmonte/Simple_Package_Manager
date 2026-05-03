@@ -443,14 +443,10 @@ install() {
                     pkg_repo=\$(echo {} | awk '{print (\$2 == \"aur\") ? \"aur\" : \$3}')
 
                     if pacman -Qi \$pkg_name &>/dev/null; then
-                        installed_version=\$(expac -Q '%v' \$pkg_name 2>/dev/null)
-                        repo=\$(expac -S '%r %v' \$pkg_name 2>/dev/null | awk -v ver=\$installed_version '\$2==ver{print \$1; exit}')
-                        [[ -z \$repo ]] && repo=\$(expac -S '%r' \$pkg_name 2>/dev/null | head -1)
-                        [[ -z \$repo ]] && repo=aur
                         echo -e \"\${BOLD}\${GREEN}● Package Status: INSTALLED\${RESET}\"
                         echo
                         echo -e \"\${BOLD}\${CYAN}Package Information\${RESET}\"
-                        yay -Qi \$pkg_name | sed \"s/^Installed From.*\$/Installed From  : \$repo/\"
+                        yay -Qi \$pkg_name | sed \"s/^Installed From.*\$/Installed From  : \$pkg_repo/\"
                         echo
                         echo -e \"\${BOLD}Installed Files:\${RESET}\"
                         pacman -Ql \$pkg_name | grep -v '/\$' | cut -d' ' -f2- | head -50
@@ -557,10 +553,11 @@ remove() {
             --preview '
 
                 pkg_info=$(yay -Qi {1} 2>/dev/null)
-                installed_version=$(expac -Q "%v" {1} 2>/dev/null)
-                repo=$(expac -S "%r %v" {1} 2>/dev/null | awk -v ver=$installed_version "\$2==ver{print \$1; exit}")
-                [[ -z $repo ]] && repo=$(expac -S "%r" {1} 2>/dev/null | head -1)
-                [[ -z $repo ]] && repo=aur
+                if pacman -Qm {1} &>/dev/null; then
+                    repo=aur
+                else
+                    repo=$(pacman -Si {1} 2>/dev/null | awk "/^Repository/{print \$3; exit}")
+                fi
 
                 echo -e "${BOLD}${RED}⚠ Package Information: {1}${RESET}"
                 echo
