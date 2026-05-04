@@ -122,13 +122,13 @@ get_preview_width() {
 }
 
 get_pacman_cache_size() {
-    local size
-    size=$(du -sh /var/cache/pacman/pkg 2>/dev/null | cut -f1)
-    if [[ -z "$size" || "$size" == "0" ]]; then
+    local count
+    count=$(find /var/cache/pacman/pkg -mindepth 1 -maxdepth 1 -name '*.pkg.tar.*' 2>/dev/null | wc -l)
+    if [[ "$count" -eq 0 ]]; then
         echo "0"
-    else
-        echo "$size"
+        return
     fi
+    du -sh /var/cache/pacman/pkg 2>/dev/null | cut -f1
 }
 
 get_yay_cache_size() {
@@ -1755,18 +1755,20 @@ Alt+[ increase preview | Alt+] decrease preview"
                     printf '\033[1mCommand to execute:\033[0m\n'
                     case {} in
                         'All + Latest'*)
-                            echo 'sudo rm -f /var/cache/pacman/pkg/*.pkg.tar.*'
-                            echo 'yay -Scc --noconfirm'
+                            echo 'sudo find /var/cache/pacman/pkg -mindepth 1 -delete'
+                            echo 'rm -rf ~/.cache/yay'
                             ;;
                         'All - Latest'*)
                             echo 'sudo pacman -Sc --noconfirm'
-                            echo 'yay -Sc --noconfirm'
+                            echo 'sudo rm -rf /var/cache/pacman/pkg/download-*'
+                            echo 'rm -rf ~/.cache/yay'
                             ;;
                         'Pacman Cache'*)
                             echo 'sudo pacman -Sc'
+                            echo 'sudo rm -rf /var/cache/pacman/pkg/download-*'
                             ;;
                         'AUR Cache'*)
-                            echo 'yay -Sc'
+                            echo 'rm -rf ~/.cache/yay'
                             ;;
                         *)
                             echo 'No command to execute'
@@ -1777,7 +1779,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     pacman_cache=\$(du -sh /var/cache/pacman/pkg 2>/dev/null | cut -f1)
                     echo \"pacman cache: \$pacman_cache\"
                     yay_pkg_size=\$(du -sh ~/.cache/yay 2>/dev/null | cut -f1)
-                    if [[ -n \"\$yay_pkg_size\" && \"\$yay_pkg_size\" != '0' ]]; then
+                    if [[ -n \"\$yay_pkg_size\" ]]; then
                         echo \"AUR cache: \$yay_pkg_size\"
                     else
                         echo 'AUR cache: 0'
@@ -1829,6 +1831,12 @@ Alt+[ increase preview | Alt+] decrease preview"
 
         local operation_cancelled=false
 
+        if [[ "$selected_option" != "AUR Cache"* ]] && [[ -f /var/lib/pacman/db.lck ]]; then
+            echo "Pacman is currently running. Cannot modify cache."
+            sleep 2
+            continue
+        fi
+
         case "$selected_option" in
             "All + Latest"*)
                 echo "Clearing ALL package caches including latest versions..."
@@ -1850,8 +1858,8 @@ Alt+[ increase preview | Alt+] decrease preview"
 
                 if ! $operation_cancelled; then
                     if [[ $confirm =~ ^[Yy]$ ]]; then
-                        sudo rm -f /var/cache/pacman/pkg/*.pkg.tar.*
-                        yay -Scc --noconfirm
+                        sudo find /var/cache/pacman/pkg -mindepth 1 -delete
+                        rm -rf ~/.cache/yay
                     else
                         echo "Operation cancelled."
                         sleep 1
@@ -1862,15 +1870,17 @@ Alt+[ increase preview | Alt+] decrease preview"
             "All - Latest"*)
                 echo "Performing cache clear (keeping latest versions)..."
                 sudo pacman -Sc --noconfirm
-                yay -Sc --noconfirm
+                sudo rm -rf /var/cache/pacman/pkg/download-*
+                rm -rf ~/.cache/yay
                 ;;
             "Pacman Cache"*)
                 echo "Clearing pacman cache..."
                 sudo pacman -Sc
+                sudo rm -rf /var/cache/pacman/pkg/download-*
                 ;;
             "AUR Cache"*)
                 echo "Clearing AUR cache..."
-                yay -Sc
+                rm -rf ~/.cache/yay
                 ;;
         esac
 
@@ -1879,7 +1889,7 @@ Alt+[ increase preview | Alt+] decrease preview"
         fi
 
         echo
-        local remaining_cache=$(du -sh /var/cache/pacman/pkg 2>/dev/null | cut -f1)
+        local remaining_cache=$(sudo du -sh /var/cache/pacman/pkg 2>/dev/null | cut -f1)
         echo "Operation completed. Remaining pacman cache size: $remaining_cache"
         echo
 
