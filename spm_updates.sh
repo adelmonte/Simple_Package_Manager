@@ -18,7 +18,6 @@ else
     echo "No updates available." > "$DETAILED_CACHE_FILE"
 fi
 
-echo "Regenerating package list cache..."
 repo_order=$(grep '^\[.*\]' /etc/pacman.conf | grep -v '^\[options\]' | sed 's/[][]//g')
 installed_packages=$(pacman -Qq 2>/dev/null)
 
@@ -57,6 +56,5 @@ explicit=$(pacman -Qeq | wc -l)
 echo "$packages $explicit" > "$HEADER_CACHE_FILE"
 chmod 666 "$HEADER_CACHE_FILE" 2>/dev/null
 
-echo "Updates found: $updates"
-echo "Package list cache updated"
+echo "spm: cache refreshed ($updates pacman updates pending)"
 exit 0
