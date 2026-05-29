@@ -56,5 +56,5 @@ explicit=$(pacman -Qeq | wc -l)
 echo "$packages $explicit" > "$HEADER_CACHE_FILE"
 chmod 666 "$HEADER_CACHE_FILE" 2>/dev/null
 
-echo "spm: cache refreshed ($updates pacman updates pending)"
+printf '\033[1mspm:\033[0m cache refreshed (%d pacman updates pending)\n' "$updates"
 exit 0
