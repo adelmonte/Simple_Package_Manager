@@ -3,7 +3,7 @@
 # SPM - Simple Package Manager
 # Dependencies: fzf (0.58.0+), yay or paru, curl
 
-SPM_VERSION="3.0"
+SPM_VERSION="3.0.1"
 
 CLI_MODE=0
 AUR_HELPER=""
@@ -134,12 +134,6 @@ spm_confirm() {
 invalidate_package_cache() {
     rm -f "$PACKAGE_LIST_CACHE" 2>/dev/null
     [[ -f "$PACKAGE_LIST_CACHE" ]] && : > "$PACKAGE_LIST_CACHE" 2>/dev/null
-}
-
-# Returns success if a background updater is keeping the cache fresh.
-# Currently detects the systemd timer; extend here for other init systems.
-background_updater_active() {
-    command -v systemctl &>/dev/null && systemctl is-enabled spm_updates.timer &>/dev/null
 }
 
 refresh_update_cache() {
@@ -393,12 +387,10 @@ install() {
             regenerate_cache=true
         elif [[ $(wc -l < "$cache_file") -lt 100 ]] || grep -qP '\x00' "$cache_file" 2>/dev/null; then
             regenerate_cache=true
-        elif ! background_updater_active; then
-            if [[ -n $(find /var/lib/pacman/sync -name '*.db' -newer "$cache_file" 2>/dev/null) ]]; then
-                regenerate_cache=true
-            elif [[ -z $(find "$cache_file" -mmin -60 2>/dev/null) ]]; then
-                regenerate_cache=true
-            fi
+        elif [[ -n $(find /var/lib/pacman/sync -name '*.db' -newer "$cache_file" 2>/dev/null) ]]; then
+            regenerate_cache=true
+        elif [[ -z $(find "$cache_file" -mmin -60 2>/dev/null) ]]; then
+            regenerate_cache=true
         fi
 
         if [[ "$regenerate_cache" == true ]]; then
@@ -457,17 +449,6 @@ install() {
             fi
 
             cat "$pkglist_temp" > "$cache_file" 2>/dev/null || cache_file="$pkglist_temp"
-
-            if ! background_updater_active; then
-                echo
-                echo "Note: Automatic cache updates are not enabled."
-                echo "Schedule 'spm_updates' to run periodically to keep the package cache fresh."
-                if command -v systemctl &>/dev/null; then
-                    echo "  systemctl enable --now spm_updates.timer"
-                fi
-                echo
-                sleep 2
-            fi
         fi
 
         local selected_packages=$(fzf --multi --reverse < "$cache_file" \
