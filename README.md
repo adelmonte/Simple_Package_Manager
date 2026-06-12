@@ -33,6 +33,10 @@ SPM replaces command-line package management with an interactive interface. Inst
 
 **Interactive configuration** - Edit pacman.conf options and manage repositories without opening a text editor
 
+**File search** - Find which repo package provides a file
+
+**Package list export** - Snapshot your installed packages for backup or migration
+
 ## Installation
 
 ```bash
@@ -56,6 +60,7 @@ spm -d [package]    # Downgrade
 spm -c              # Manage cache
 spm -H              # Manage ALPM hooks
 spm -p              # Manage pacnew/pacsave files
+spm -f              # Search files in repo packages
 ```
 
 ## Cache Files and ALPM Hook
@@ -75,8 +80,9 @@ SPM uses lightweight cache files in `/var/cache/spm/` to keep the interface resp
 
 ## Requirements
 
-- fzf
-- yay
+- fzf (0.58.0 or newer)
+- yay or paru
+- curl
 
 ## License
 

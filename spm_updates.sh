@@ -4,7 +4,18 @@ DETAILED_CACHE_FILE="/var/cache/spm/detailed-update-cache.txt"
 PACKAGE_LIST_CACHE="/var/cache/spm/package-list-cache.txt"
 HEADER_CACHE_FILE="/var/cache/spm/header-cache.txt"
 
-mkdir -p "$(dirname "$CACHE_FILE")"
+CACHE_DIR=$(dirname "$CACHE_FILE")
+mkdir -p "$CACHE_DIR"
+chmod 1777 "$CACHE_DIR" 2>/dev/null
+
+if command -v yay > /dev/null 2>&1; then
+    AUR_HELPER="yay"
+elif command -v paru > /dev/null 2>&1; then
+    AUR_HELPER="paru"
+else
+    echo "spm_updates: no AUR helper (yay or paru) found" >&2
+    exit 1
+fi
 
 pacman -Sy > /dev/null 2>&1
 
@@ -17,11 +28,12 @@ if [ "$updates" -gt 0 ]; then
 else
     echo "No updates available." > "$DETAILED_CACHE_FILE"
 fi
+chmod 666 "$CACHE_FILE" "$DETAILED_CACHE_FILE" 2>/dev/null
 
 repo_order=$(grep '^\[.*\]' /etc/pacman.conf | grep -v '^\[options\]' | sed 's/[][]//g')
 installed_packages=$(pacman -Qq 2>/dev/null)
 
-yay -Sl 2>&1 | grep -v "error:" | awk -v repo_order="$repo_order" -v installed="$installed_packages" '
+"$AUR_HELPER" -Sl 2>&1 | grep -v "error:" | awk -v repo_order="$repo_order" -v installed="$installed_packages" '
 BEGIN {
     split(repo_order, repos)
     for (i in repos) {
@@ -50,6 +62,7 @@ BEGIN {
         printf "%01d %03d %s %s|%s|%s\n", installed_priority, priority, package, version, repo, status
     }
 }' | sort -n | cut -d' ' -f3- | column -t -s'|' > "$PACKAGE_LIST_CACHE"
+chmod 666 "$PACKAGE_LIST_CACHE" 2>/dev/null
 
 packages=$(pacman -Qq | wc -l)
 explicit=$(pacman -Qeq | wc -l)
