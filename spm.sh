@@ -136,6 +136,12 @@ invalidate_package_cache() {
     [[ -f "$PACKAGE_LIST_CACHE" ]] && : > "$PACKAGE_LIST_CACHE" 2>/dev/null
 }
 
+# Returns success if a background updater is keeping the cache fresh.
+# Currently detects the systemd timer; extend here for other init systems.
+background_updater_active() {
+    command -v systemctl &>/dev/null && systemctl is-enabled spm_updates.timer &>/dev/null
+}
+
 refresh_update_cache() {
     local detailed updates
     detailed=$(pacman -Qu 2>/dev/null | grep -v '\[ignored\]')
@@ -387,7 +393,7 @@ install() {
             regenerate_cache=true
         elif [[ $(wc -l < "$cache_file") -lt 100 ]] || grep -qP '\x00' "$cache_file" 2>/dev/null; then
             regenerate_cache=true
-        elif ! systemctl is-enabled spm_updates.timer &>/dev/null; then
+        elif ! background_updater_active; then
             if [[ -n $(find /var/lib/pacman/sync -name '*.db' -newer "$cache_file" 2>/dev/null) ]]; then
                 regenerate_cache=true
             elif [[ -z $(find "$cache_file" -mmin -60 2>/dev/null) ]]; then
@@ -452,10 +458,13 @@ install() {
 
             cat "$pkglist_temp" > "$cache_file" 2>/dev/null || cache_file="$pkglist_temp"
 
-            if ! systemctl is-enabled spm_updates.timer &>/dev/null; then
+            if ! background_updater_active; then
                 echo
-                echo "Note: Enable spm_updates.timer to keep the cache updated automatically:"
-                echo "  systemctl enable --now spm_updates.timer"
+                echo "Note: Automatic cache updates are not enabled."
+                echo "Schedule 'spm_updates' to run periodically to keep the package cache fresh."
+                if command -v systemctl &>/dev/null; then
+                    echo "  systemctl enable --now spm_updates.timer"
+                fi
                 echo
                 sleep 2
             fi
