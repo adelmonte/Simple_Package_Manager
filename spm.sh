@@ -2901,6 +2901,8 @@ Alt+[ increase preview | Alt+] decrease preview" \
 }
 
 export_package_list() {
+    trap 'trap - INT; echo; return' INT
+
     clear_screen
     echo "${BOLD}${CYAN}Export Package List${RESET}"
     echo
@@ -2909,6 +2911,7 @@ export_package_list() {
 
     local target_dir
     target_dir=$(spm_read_input "Export directory [$HOME]: ") || {
+        trap - INT
         handle_cancel
         return
     }
@@ -2918,6 +2921,7 @@ export_package_list() {
         echo "Directory does not exist: $target_dir"
         read -p "Press any key to return... " -n 1 -s -r
         echo
+        trap - INT
         return
     fi
 
@@ -2939,6 +2943,7 @@ export_package_list() {
     echo
     read -p "Press any key to return... " -n 1 -s -r
     echo
+    trap - INT
 }
 
 system_tools_menu() {
