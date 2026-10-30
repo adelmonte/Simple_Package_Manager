@@ -74,7 +74,7 @@ SPM uses lightweight cache files in `/var/cache/spm/` to keep the interface resp
 | `detailed-update-cache.txt` | Full list of available updates with version info |
 | `package-list-cache.txt` | Pre-sorted list of all available packages (repo + AUR) with install status |
 
-**Systemd timer** (`spm_updates.timer`) — Periodically syncs the package database, checks for updates, and regenerates the package list and header caches in the background.
+**Systemd timer** (`spm_updates.timer`) — Periodically checks for updates against a private copy of the sync database (so it never causes partial upgrades) and regenerates the package list and header caches in the background.
 
 **ALPM hook** (`spm_header_cache.hook`) — A pacman post-transaction hook that fires after any package install, upgrade, or removal. It refreshes the header cache so package counts stay accurate even when packages change outside of SPM.
 

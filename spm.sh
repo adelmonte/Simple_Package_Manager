@@ -3,9 +3,10 @@
 # SPM - Simple Package Manager
 # Dependencies: fzf (0.58.0+), yay or paru, curl
 
-SPM_VERSION="3.0.1"
+SPM_VERSION="3.0.3"
 
 CLI_MODE=0
+SPM_PKGLIST_PID=""
 AUR_HELPER=""
 AUR_CACHE_DIR=""
 
@@ -15,6 +16,7 @@ UPDATE_CACHE_FILE="$SPM_CACHE_DIR/update-cache.txt"
 DETAILED_UPDATE_CACHE_FILE="$SPM_CACHE_DIR/detailed-update-cache.txt"
 PACKAGE_LIST_CACHE="$SPM_CACHE_DIR/package-list-cache.txt"
 HEADER_CACHE_FILE="$SPM_CACHE_DIR/header-cache.txt"
+SPM_SYNC_DB="/var/lib/spm/db"
 
 # Per-user state
 SPM_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/spm"
@@ -98,6 +100,43 @@ spm_read_input() {
     rm -f "$tmp"
 }
 
+# Fills SPM_FRAME with the shared fzf layout for list screens: title in the border, key hints in the header
+spm_frame() {
+    local hints="$2"
+    [[ $CLI_MODE -eq 1 ]] && hints=${hints/Ctrl+C to return/Ctrl+C to exit}
+    SPM_FRAME=(
+        --style=full:line
+        --no-highlight-line
+        --cycle
+        --preview-border=line
+        --border-label=" $1 "
+        --header="$hints"$'\n'"Alt+[ increase preview | Alt+] decrease preview"
+        --preview-window="right:$(get_preview_width)%:wrap"
+        --bind 'resize:refresh-preview'
+        "${FZF_RESIZE_BINDS[@]}"
+        --ansi
+    )
+}
+
+spm_sudoedit() {
+    local editor="${SUDO_EDITOR:-${VISUAL:-$EDITOR}}"
+    if [[ -z "$editor" ]]; then
+        local candidate
+        for candidate in nvim vim nano vi; do
+            if command -v "$candidate" &>/dev/null; then
+                editor="$candidate"
+                break
+            fi
+        done
+    fi
+    if [[ -z "$editor" ]]; then
+        echo "No editor available. Set \$EDITOR or install nvim, vim, or nano."
+        sleep 2
+        return 1
+    fi
+    SUDO_EDITOR="$editor" sudoedit "$@"
+}
+
 clear_screen() {
     clear
     print_header
@@ -131,14 +170,100 @@ spm_confirm() {
     fi
 }
 
+package_list_stale() {
+    local cache_file="$1"
+    [[ ! -s "$cache_file" ]] && return 0
+    [[ $(wc -l < "$cache_file") -lt 100 ]] && return 0
+    grep -qP '\x00' "$cache_file" 2>/dev/null && return 0
+    [[ -n $(find /var/lib/pacman/sync -name '*.db' -newer "$cache_file" 2>/dev/null) ]] && return 0
+    [[ -z $(find "$cache_file" -mmin -60 2>/dev/null) ]] && return 0
+    return 1
+}
+
+# Builds the install list into $1, fetching repo and AUR lists in parallel.
+# With a token file and id ($2, $3), the result is discarded if a newer build has started.
+# Returns 124 if the AUR list timed out, 1 if nothing was generated, 2 if $1 was not writable
+generate_package_list() {
+    local dest="$1" token="$2" id="$3" work repo_pid aur_rc
+    work=$(mktemp -d /tmp/spm-pkglist.XXXXXX) || return 1
+    local repo_order=$(grep '^\[.*\]' /etc/pacman.conf | grep -v '^\[options\]' | sed 's/[][]//g' | tr '\n' ' ')
+    pacman -Qq > "$work/installed" 2>/dev/null
+
+    pacman -Sl > "$work/repo" 2>/dev/null &
+    repo_pid=$!
+    timeout 60 "$AUR_HELPER" -Sla > "$work/aur" 2>/dev/null
+    aur_rc=$?
+    wait "$repo_pid"
+
+    if [[ $aur_rc -eq 124 ]]; then
+        rm -rf "$work"
+        return 124
+    fi
+
+    cat "$work/repo" "$work/aur" | awk -v repo_order="$repo_order" -v installed_file="$work/installed" '
+        BEGIN {
+            split(repo_order, repos)
+            for (i in repos) {
+                repo_priority[repos[i]] = i
+            }
+            while ((getline pkg < installed_file) > 0) {
+                is_installed[pkg] = 1
+            }
+            close(installed_file)
+        }
+        {
+            repo = $1
+            package = $2
+            version = $3
+            if (version == "" || version == "unknown" || version == "unknown-version") {
+                version = "unknown"
+            }
+            priority = (repo in repo_priority) ? repo_priority[repo] : (repo == "aur" ? 998 : 999)
+            installed_priority = (package in is_installed) ? 0 : 1
+            status = (package in is_installed) ? "[INSTALLED]" : ""
+
+            if (repo == "aur") {
+                printf "%01d %03d %s|%s|%s\n", installed_priority, priority, package, repo, status
+            } else {
+                printf "%01d %03d %s %s|%s|%s\n", installed_priority, priority, package, version, repo, status
+            }
+        }' | sort -n | cut -d' ' -f3- | column -t -s'|' > "$work/list"
+
+    if [[ ! -s "$work/list" ]]; then
+        rm -rf "$work"
+        return 1
+    fi
+    if [[ -n "$token" && -f "$token" && $(< "$token") != "$id" ]]; then
+        rm -rf "$work"
+        return 3
+    fi
+    if ! cat "$work/list" > "$dest" 2>/dev/null; then
+        cp "$work/list" "$SPM_TMPDIR/package_list" 2>/dev/null
+        rm -rf "$work"
+        return 2
+    fi
+    rm -rf "$work"
+}
+
+refresh_package_list_in_background() {
+    local token="$SPM_TMPDIR/pkglist_token" id="$EPOCHREALTIME"
+    echo "$id" > "$token"
+    generate_package_list "$PACKAGE_LIST_CACHE" "$token" "$id" > /dev/null 2>&1 &
+    SPM_PKGLIST_PID=$!
+}
+
 invalidate_package_cache() {
     rm -f "$PACKAGE_LIST_CACHE" 2>/dev/null
     [[ -f "$PACKAGE_LIST_CACHE" ]] && : > "$PACKAGE_LIST_CACHE" 2>/dev/null
+    refresh_package_list_in_background
 }
 
 refresh_update_cache() {
-    local detailed updates
-    detailed=$(pacman -Qu 2>/dev/null | grep -v '\[ignored\]')
+    local detailed updates dbpath=()
+    if [[ -n $(find "$SPM_SYNC_DB/sync" -maxdepth 1 -name '*.db' -newer /var/lib/pacman/sync 2>/dev/null) ]]; then
+        dbpath=(--dbpath "$SPM_SYNC_DB")
+    fi
+    detailed=$(pacman -Qu "${dbpath[@]}" 2>/dev/null | grep -v '\[ignored\]')
     if [[ -n "$detailed" ]]; then
         updates=$(echo "$detailed" | wc -l)
     else
@@ -227,8 +352,6 @@ print_header() {
 }
 
 show_help() {
-    clear_screen
-
     echo "${BOLD}${CYAN}SPM - Simple Package Manager${RESET}"
     echo "${BOLD}A modern TUI wrapper for pacman/yay with fzf${RESET}"
     echo
@@ -378,86 +501,43 @@ install() {
         clear_screen
 
         local search_query="$1"
-        local preview_width=$(get_preview_width)
         local cache_file="$PACKAGE_LIST_CACHE"
 
-        local regenerate_cache=false
-
-        if [[ ! -s "$cache_file" ]]; then
-            regenerate_cache=true
-        elif [[ $(wc -l < "$cache_file") -lt 100 ]] || grep -qP '\x00' "$cache_file" 2>/dev/null; then
-            regenerate_cache=true
-        elif [[ -n $(find /var/lib/pacman/sync -name '*.db' -newer "$cache_file" 2>/dev/null) ]]; then
-            regenerate_cache=true
-        elif [[ -z $(find "$cache_file" -mmin -60 2>/dev/null) ]]; then
-            regenerate_cache=true
+        if [[ -n "$SPM_PKGLIST_PID" ]] && kill -0 "$SPM_PKGLIST_PID" 2>/dev/null; then
+            echo "Updating package list..."
+            wait "$SPM_PKGLIST_PID" 2>/dev/null
         fi
+        SPM_PKGLIST_PID=""
 
-        if [[ "$regenerate_cache" == true ]]; then
+        if package_list_stale "$cache_file"; then
             echo "Generating package cache... This may take a moment."
-            local repo_order=$(grep '^\[.*\]' /etc/pacman.conf | grep -v '^\[options\]' | sed 's/[][]//g' | tr '\n' ' ')
-            local installed_temp="$SPM_TMPDIR/installed_packages"
-            local pkglist_temp="$SPM_TMPDIR/package_list"
-            pacman -Qq 2>/dev/null > "$installed_temp"
-
-            timeout 60 "$AUR_HELPER" -Sl 2>&1 | grep -v "^Get " | awk -v repo_order="$repo_order" -v installed_file="$installed_temp" '
-            BEGIN {
-                split(repo_order, repos)
-                for (i in repos) {
-                    repo_priority[repos[i]] = i
-                }
-                while ((getline pkg < installed_file) > 0) {
-                    is_installed[pkg] = 1
-                }
-                close(installed_file)
-            }
-            {
-                repo = $1
-                package = $2
-                version = $3
-                if (version == "" || version == "unknown" || version == "unknown-version") {
-                    version = "unknown"
-                }
-                priority = (repo in repo_priority) ? repo_priority[repo] : (repo == "aur" ? 998 : 999)
-                installed_priority = (package in is_installed) ? 0 : 1
-                status = (package in is_installed) ? "[INSTALLED]" : ""
-
-                if (repo == "aur") {
-                    printf "%01d %03d %s|%s|%s\n", installed_priority, priority, package, repo, status
-                } else {
-                    printf "%01d %03d %s %s|%s|%s\n", installed_priority, priority, package, version, repo, status
-                }
-            }' | sort -n | cut -d' ' -f3- | column -t -s'|' > "$pkglist_temp"
-
-            local exit_code=${PIPESTATUS[0]}
-
-            if [[ $exit_code -eq 124 ]]; then
-                echo "Warning: Package list generation timed out (AUR may be slow)."
-                echo ""
-                read -p "Press any key to retry or Ctrl+C to exit... " -n 1 -s -r
-                echo
-                continue
-            fi
-
-            if [[ ! -s "$pkglist_temp" ]]; then
-                echo "Error: Failed to generate package cache."
-                echo "This may be due to network issues with AUR."
-                echo ""
-                read -p "Press any key to retry or Ctrl+C to exit... " -n 1 -s -r
-                echo
-                continue
-            fi
-
-            cat "$pkglist_temp" > "$cache_file" 2>/dev/null || cache_file="$pkglist_temp"
+            generate_package_list "$cache_file"
+            case $? in
+                124)
+                    echo "Warning: Package list generation timed out (AUR may be slow)."
+                    echo ""
+                    read -p "Press any key to retry or Ctrl+C to exit... " -n 1 -s -r
+                    echo
+                    continue
+                    ;;
+                1)
+                    echo "Error: Failed to generate package cache."
+                    echo "This may be due to network issues with AUR."
+                    echo ""
+                    read -p "Press any key to retry or Ctrl+C to exit... " -n 1 -s -r
+                    echo
+                    continue
+                    ;;
+                2)
+                    cache_file="$SPM_TMPDIR/package_list"
+                    ;;
+            esac
         fi
 
+        spm_frame "Install Packages" "Select package(s) to install | Tab to multi-select | Enter to confirm | Ctrl+C to return"
         local selected_packages=$(fzf --multi --reverse < "$cache_file" \
-            --style=full:line \
-            --no-highlight-line \
-            --cycle \
+            "${SPM_FRAME[@]}" \
             --scrollbar='█' \
-            --preview-border=line \
-            --border-label=" Install Packages " \
             --preview "
 
                 pkg_name=\$(echo {} | awk '{print \$1}')
@@ -476,7 +556,12 @@ install() {
                     echo
                     echo -e \"\${BOLD}\${CYAN}Package Information\${RESET}\"
                     if [[ \$pkg_repo == aur ]]; then
-                        $AUR_HELPER -Si aur/\$pkg_name
+                        info=\"$SPM_TMPDIR/aur-info-\$pkg_name\"
+                        if [[ ! -s \"\$info\" ]]; then
+                            $AUR_HELPER -Si aur/\$pkg_name > \"\$info.\$\$\" 2>/dev/null && mv \"\$info.\$\$\" \"\$info\"
+                            rm -f \"\$info.\$\$\"
+                        fi
+                        cat \"\$info\" 2>/dev/null || echo 'Package information unavailable.'
                         echo
                         echo -e \"\${BOLD}\${YELLOW}File list available after installation.\${RESET}\"
                     else
@@ -484,11 +569,6 @@ install() {
                     fi
                 fi
             " \
-            --preview-window="right:$preview_width%:wrap" \
-            --header="Select package(s) to install | Tab to multi-select | Enter to confirm | Ctrl+C to return
-Alt+[ increase preview | Alt+] decrease preview" \
-            --bind 'resize:refresh-preview' \
-            "${FZF_RESIZE_BINDS[@]}" \
             --tiebreak=index \
             --ansi \
             ${search_query:+-q "$search_query"} \
@@ -533,20 +613,153 @@ Alt+[ increase preview | Alt+] decrease preview" \
     done
 }
 
+# Prompts for a removal method and removes the given packages; returns 1 if cancelled
+remove_packages() {
+    local packages="$1"
+
+    echo "${BOLD}${CYAN}The following packages will be removed:${RESET}"
+    echo "$packages" | sed 's/^/  → /' | while read line; do
+        echo -e "${RED}${line}${RESET}"
+    done
+    echo
+
+    echo "${BOLD}Package Removal Options:${RESET}"
+    echo "------------------------"
+    echo
+
+    local pacman_args=""
+
+    echo "  ${BOLD}1)${RESET} Full removal (package, deps, configs, and reverse deps) ${YELLOW}-Rnsc${RESET}"
+    echo "  ${BOLD}2)${RESET} Standard removal (package, deps, and configs) ${YELLOW}-Rns${RESET}"
+    echo "  ${BOLD}3)${RESET} Remove package and configs only ${YELLOW}-Rn${RESET}"
+    echo "  ${BOLD}4)${RESET} Remove package and dependencies ${YELLOW}-Rs${RESET}"
+    echo "  ${BOLD}5)${RESET} Remove package only ${YELLOW}-R${RESET}"
+    echo "  ${BOLD}6)${RESET} Force removal ignoring dependencies ${YELLOW}-Rdd${RESET} ${RED}(dangerous)${RESET}"
+    echo "  ${BOLD}7)${RESET} Force removal with configs ${YELLOW}-Rddn${RESET} ${RED}(dangerous)${RESET}"
+    echo
+
+    local remove_option
+    remove_option=$(spm_read_input "Enter option 1-7 [1] (Ctrl+C to cancel): ") || {
+        handle_cancel
+        return 1
+    }
+
+    case $remove_option in
+        1|"") pacman_args="-Rnsc";;
+        2) pacman_args="-Rns";;
+        3) pacman_args="-Rn";;
+        4) pacman_args="-Rs";;
+        5) pacman_args="-R";;
+        6) pacman_args="-Rdd";;
+        7) pacman_args="-Rddn";;
+        *)
+            echo "Invalid option."
+            sleep 1
+            return 1
+            ;;
+    esac
+
+    spm_confirm "Proceed with removal using $pacman_args? [Y/n]"
+    case $? in
+        130)
+            handle_cancel
+            return 1
+            ;;
+        1)
+            echo "Operation cancelled."
+            sleep 1
+            return 1
+            ;;
+    esac
+
+    "$AUR_HELPER" $pacman_args $packages
+    invalidate_package_cache
+    refresh_header_cache
+}
+
+# Action picker for a single installed package: remove, or flip its install reason
+package_actions() {
+    local pkg="$1" reason mark_label mark_flag action
+    reason=$(LC_ALL=C pacman -Qi "$pkg" 2>/dev/null | awk -F': ' '/^Install Reason/ {print $2}')
+    if [[ "$reason" == Explicitly* ]]; then
+        mark_label="Mark as dependency"
+        mark_flag="--asdeps"
+    else
+        mark_label="Mark as explicitly installed"
+        mark_flag="--asexplicit"
+    fi
+
+    spm_frame "$pkg" "Choose an action | Enter to select | Ctrl+C to go back"
+    action=$(printf '%s\n' "Remove" "$mark_label" "← Back" | fzf --reverse \
+        "${SPM_FRAME[@]}" \
+        --no-input \
+        --preview '
+            echo
+            case {} in
+                Remove)
+                    echo -e "${BOLD}${RED}Remove '"$pkg"'${RESET}"
+                    echo
+                    echo "Next you choose the removal method (default -Rnsc)."
+                    echo
+                    if removal_list=$(pacman -Rsp '"$pkg"' 2>/dev/null); then
+                        echo -e "${BOLD}Removed along with it (-Rs):${RESET}"
+                        echo "$removal_list" | sed "s/^/  /"
+                    else
+                        echo -e "${BOLD}${RED}Required by other packages${RESET} (-Rnsc would remove them too):"
+                        echo "$removal_list" | sed -n "s/.*required by /  /p" | sort -u
+                    fi
+                    ;;
+                "Mark as dependency")
+                    echo -e "${BOLD}Command to execute:${RESET}"
+                    echo "sudo pacman -D --asdeps '"$pkg"'"
+                    echo
+                    echo "Once nothing depends on it, it becomes an orphan"
+                    echo "and Clean Orphans will remove it."
+                    ;;
+                "Mark as explicitly installed")
+                    echo -e "${BOLD}Command to execute:${RESET}"
+                    echo "sudo pacman -D --asexplicit '"$pkg"'"
+                    echo
+                    echo "Clean Orphans will never remove it."
+                    ;;
+                *)
+                    echo "Return to the list"
+                    ;;
+            esac
+        ')
+
+    case "$action" in
+        "Remove")
+            clear_screen
+            remove_packages "$pkg" || return 1
+            ;;
+        "Mark as"*)
+            clear_screen
+            sudo pacman -D "$mark_flag" "$pkg" || {
+                read -p "Press any key to return to the list... " -n 1 -s -r
+                return 1
+            }
+            refresh_header_cache
+            rm -f "$SPM_STATE_DIR/high_impact"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+    echo
+    read -p "Press any key to return to the list... " -n 1 -s -r
+}
+
 remove() {
     while true; do
         clear_screen
 
         local search_query="$1"
-        local preview_width=$(get_preview_width)
 
+        spm_frame "Remove Packages" "Select package(s) to remove | Tab to multi-select | Enter to confirm | Ctrl+C to return"
         local selected_packages=$(pacman -Qq | fzf --multi --reverse \
-            --style=full:line \
-            --no-highlight-line \
-            --cycle \
+            "${SPM_FRAME[@]}" \
             --scrollbar='█' \
-            --preview-border=line \
-            --border-label=" Remove Packages " \
             --preview '
 
                 pkg_info=$($AUR_HELPER -Qi {1} 2>/dev/null)
@@ -567,11 +780,6 @@ remove() {
                 echo -e "${BOLD}Installed Files:${RESET}"
                 pacman -Ql {1} | grep -v "/$" | cut -d" " -f2- | head -100
             ' \
-            --preview-window="right:$preview_width%:wrap" \
-            --header="Select package(s) to remove | Tab to multi-select | Enter to confirm | Ctrl+C to return
-Alt+[ increase preview | Alt+] decrease preview" \
-            --bind 'resize:refresh-preview' \
-            "${FZF_RESIZE_BINDS[@]}" \
             --ansi \
             ${search_query:+-q "$search_query"})
 
@@ -580,64 +788,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
             return
         fi
 
-        echo "${BOLD}${CYAN}The following packages will be removed:${RESET}"
-        echo "$selected_packages" | sed 's/^/  → /' | while read line; do
-            echo -e "${RED}${line}${RESET}"
-        done
-        echo
-
-        echo "${BOLD}Package Removal Options:${RESET}"
-        echo "------------------------"
-        echo
-
-        local pacman_args=""
-
-        echo "  ${BOLD}1)${RESET} Full removal (package, deps, configs, and reverse deps) ${YELLOW}-Rnsc${RESET}"
-        echo "  ${BOLD}2)${RESET} Standard removal (package, deps, and configs) ${YELLOW}-Rns${RESET}"
-        echo "  ${BOLD}3)${RESET} Remove package and configs only ${YELLOW}-Rn${RESET}"
-        echo "  ${BOLD}4)${RESET} Remove package and dependencies ${YELLOW}-Rs${RESET}"
-        echo "  ${BOLD}5)${RESET} Remove package only ${YELLOW}-R${RESET}"
-        echo "  ${BOLD}6)${RESET} Force removal ignoring dependencies ${YELLOW}-Rdd${RESET} ${RED}(dangerous)${RESET}"
-        echo "  ${BOLD}7)${RESET} Force removal with configs ${YELLOW}-Rddn${RESET} ${RED}(dangerous)${RESET}"
-        echo
-
-        local remove_option
-        remove_option=$(spm_read_input "Enter option 1-7 [1] (Ctrl+C to cancel): ") || {
-            handle_cancel
-            continue
-        }
-
-        case $remove_option in
-            1|"") pacman_args="-Rnsc";;
-            2) pacman_args="-Rns";;
-            3) pacman_args="-Rn";;
-            4) pacman_args="-Rs";;
-            5) pacman_args="-R";;
-            6) pacman_args="-Rdd";;
-            7) pacman_args="-Rddn";;
-            *)
-                echo "Invalid option."
-                sleep 1
-                continue
-                ;;
-        esac
-
-        spm_confirm "Proceed with removal using $pacman_args? [Y/n]"
-        case $? in
-            130)
-                handle_cancel
-                continue
-                ;;
-            1)
-                echo "Operation cancelled."
-                sleep 1
-                continue
-                ;;
-        esac
-
-        "$AUR_HELPER" $pacman_args $selected_packages
-        invalidate_package_cache
-        refresh_header_cache
+        remove_packages "$selected_packages" || continue
         echo
         if [[ $CLI_MODE -eq 1 ]]; then
             read -p "Press any key to return to remove menu or Ctrl+C to exit... " -n 1 -s -r
@@ -655,15 +806,11 @@ explore_dependencies() {
     while true; do
         clear_screen
 
-        local preview_width=$(get_preview_width)
 
+        spm_frame "Explore Dependencies" "Select a dependency package | Enter for actions | Ctrl+C to return"
         local selected_package=$(pacman -Qdq | fzf --reverse \
-            --style=full:line \
-            --no-highlight-line \
-            --cycle \
+            "${SPM_FRAME[@]}" \
             --scrollbar='█' \
-            --preview-border=line \
-            --border-label=" Explore Dependencies " \
             --preview '
 
                 pkg_info=$(pacman -Qi {1} 2>/dev/null)
@@ -686,30 +833,13 @@ explore_dependencies() {
                 echo "This package depends on:"
                 echo "$pkg_info" | grep "Depends On" | cut -d":" -f2- | tr " " "\n" | sed "s/^/  /"
             ' \
-            --preview-window="right:${preview_width}%:wrap" \
-            --header="Select a dependency package to explore | Enter to view details | Ctrl+C to return
-Alt+[ increase preview | Alt+] decrease preview" \
-            --bind 'resize:refresh-preview' \
-            "${FZF_RESIZE_BINDS[@]}" \
             --ansi)
 
         if [[ -z "$selected_package" ]]; then
             return
         fi
 
-        clear_screen
-        echo "${BOLD}${CYAN}Package: $selected_package${RESET}"
-        echo "Description: $(pacman -Qi "$selected_package" | grep "Description" | cut -d":" -f2-)"
-        echo
-        echo "${BOLD}${GREEN}Required By:${RESET}"
-        echo "Packages that depend on this:"
-        pacman -Qi "$selected_package" | grep "Required By" | cut -d":" -f2- | tr " " "\n" | sed "s/^/  /"
-        echo
-        echo "${BOLD}${YELLOW}Dependencies:${RESET}"
-        echo "This package depends on:"
-        pacman -Qi "$selected_package" | grep "Depends On" | cut -d":" -f2- | tr " " "\n" | sed "s/^/  /"
-        echo
-        read -p "Press any key to continue exploring or Ctrl+C to return... " -n 1 -s -r
+        package_actions "$selected_package"
     done
 }
 
@@ -717,59 +847,43 @@ find_high_impact_removals() {
     clear_screen
 
     local temp_file="$SPM_TMPDIR/high_impact"
+    local results_cache="$SPM_STATE_DIR/high_impact"
     : > "$temp_file"
 
-    echo "${BOLD}${CYAN}Analyzing High-Impact Removals...${RESET}"
-    echo "Finding packages that would remove the most dependencies."
-    echo
+    if [[ -s "$results_cache" && "$results_cache" -nt /var/lib/pacman/local && "$results_cache" -nt /var/log/pacman.log ]]; then
+        cp "$results_cache" "$temp_file"
+    else
+        echo "${BOLD}${CYAN}Analyzing High-Impact Removals...${RESET}"
+        echo "Finding packages that would remove the most dependencies."
+        echo
 
-    local packages=($(pacman -Qq))
-    echo "Analyzing ${#packages[@]} installed packages..."
-    echo
-    echo "Press Ctrl+C to cancel."
-    echo
+        local packages=($(pacman -Qq))
+        echo "Analyzing ${#packages[@]} installed packages..."
+        echo
+        echo "Press Ctrl+C to cancel."
+        echo
 
-    declare -A explicit_set
-    local explicit_pkg
-    for explicit_pkg in $(pacman -Qeq); do
-        explicit_set[$explicit_pkg]=1
-    done
+        trap 'trap - INT; echo; echo "Analysis cancelled."; return' INT
 
-    trap 'trap - INT; echo; echo "Analysis cancelled."; return' INT
+        for pkg in "${packages[@]}"; do
+            {
+                removal_list=$(pacman -Rsp "$pkg" 2>/dev/null) && [[ -n "$removal_list" ]] &&
+                    printf "%d %s\n" "$(wc -l <<< "$removal_list")" "$pkg"
+            } &
 
-    for pkg in "${packages[@]}"; do
-        (
-            removal_list=$(pacman -Rsp "$pkg" 2>/dev/null)
-
-            if [[ -z "$removal_list" ]]; then
-                exit 0
+            if (( $(jobs -r | wc -l) >= 12 )); then
+                wait -n
             fi
+        done >> "$temp_file"
 
-            conflict=false
-            for removed_pkg in $removal_list; do
-                if [[ "$removed_pkg" != "$pkg" && -n "${explicit_set[$removed_pkg]}" ]]; then
-                    conflict=true
-                    break
-                fi
-            done
+        wait
 
-            if [[ "$conflict" == false ]]; then
-                removed_count=$(echo "$removal_list" | wc -l)
-                printf "%d %s\n" "$removed_count" "$pkg"
-            fi
-        ) &
+        trap - INT
 
-        if (( $(jobs -r | wc -l) >= 12 )); then
-            wait -n
-        fi
-    done >> "$temp_file"
-
-    wait
-
-    trap - INT
-
-    sort -nr "$temp_file" > "${temp_file}.sorted"
-    mv "${temp_file}.sorted" "$temp_file"
+        sort -nr "$temp_file" > "${temp_file}.sorted"
+        mv "${temp_file}.sorted" "$temp_file"
+        cp "$temp_file" "$results_cache"
+    fi
 
     if [[ ! -s "$temp_file" ]]; then
         echo "${YELLOW}No high-impact removal candidates found.${RESET}"
@@ -777,18 +891,13 @@ find_high_impact_removals() {
         return
     fi
 
-    local preview_width
 
     while true; do
-        preview_width=$(get_preview_width)
 
+        spm_frame "High-Impact Removals" "High-impact removal candidates | Enter for actions | Ctrl+C to return"
         local selected_line=$(fzf --reverse < "$temp_file" \
-            --style=full:line \
-            --no-highlight-line \
-            --cycle \
+            "${SPM_FRAME[@]}" \
             --scrollbar='█' \
-            --preview-border=line \
-            --border-label=" High-Impact Removals " \
             --preview '
 
                 pkg=$(echo {} | awk "{print \$2}")
@@ -816,11 +925,6 @@ find_high_impact_removals() {
                 echo -e "${BOLD}Install Information:${RESET}"
                 echo "$pkg_info" | grep -E "Install Date|Installed Size" | sed "s/^/  /"
             ' \
-            --preview-window="right:${preview_width}%:wrap" \
-            --header="High-impact removal candidates | Enter to view details | Ctrl+C to return
-Alt+[ increase preview | Alt+] decrease preview" \
-            --bind 'resize:refresh-preview' \
-            "${FZF_RESIZE_BINDS[@]}" \
             --ansi)
 
         if [[ -z "$selected_line" ]]; then
@@ -828,24 +932,14 @@ Alt+[ increase preview | Alt+] decrease preview" \
         fi
 
         local selected_package=$(echo "$selected_line" | awk '{print $2}')
-        local removed_count=$(echo "$selected_line" | awk '{print $1}')
+        package_actions "$selected_package"
 
-        clear_screen
-        echo "${BOLD}${CYAN}Package: $selected_package${RESET}"
-        echo "Description: $(pacman -Qi "$selected_package" | grep "Description" | cut -d":" -f2-)"
-        echo
-        echo "${BOLD}${GREEN}Install Reason:${RESET}"
-        pacman -Qi "$selected_package" | grep "Install Reason" | cut -d":" -f2-
-        echo
-        echo "${BOLD}${YELLOW}Would remove $removed_count package(s)${RESET}"
-        echo
-        echo "${BOLD}Dependencies to be removed:${RESET}"
-        pacman -Rsp "$selected_package" 2>/dev/null | sed 's/^/  /'
-        echo
-        echo "${BOLD}Install Information:${RESET}"
-        pacman -Qi "$selected_package" | grep -E "Install Reason|Install Date|Installed Size" | sed 's/^/  /'
-        echo
-        read -p "Press any key to return to package list... " -n 1 -s -r
+        if ! pacman -Q "$selected_package" &>/dev/null; then
+            pacman -Qq > "${temp_file}.installed"
+            awk 'NR == FNR { installed[$1]; next } $2 in installed' "${temp_file}.installed" "$temp_file" > "${temp_file}.new"
+            mv "${temp_file}.new" "$temp_file"
+            [[ -s "$temp_file" ]] || return
+        fi
     done
 }
 
@@ -855,17 +949,13 @@ browse_explicit_packages() {
     while true; do
         clear_screen
 
-        local preview_width=$(get_preview_width)
 
         pacman -Qeq > "$explicit_tmp"
 
+        spm_frame "Explicitly Installed Packages" "Browse explicitly installed packages | Enter for actions | Ctrl+C to return"
         local selected_package=$(fzf --reverse < "$explicit_tmp" \
-            --style=full:line \
-            --no-highlight-line \
-            --cycle \
+            "${SPM_FRAME[@]}" \
             --scrollbar='█' \
-            --preview-border=line \
-            --border-label=" Explicitly Installed Packages " \
             --preview "
 
                 pkg={1}
@@ -877,29 +967,18 @@ browse_explicit_packages() {
                 echo
                 echo -e \"\${BOLD}\${YELLOW}Removal Impact:\${RESET}\"
 
-                removal_list=\$(pacman -Rsp \"\$pkg\" 2>/dev/null)
-                removed_count=\$(echo \"\$removal_list\" | wc -l)
-
-                explicit_list=\$(tr '\n' ' ' < '$explicit_tmp')
-
-                conflict=false
-                for removed in \$removal_list; do
-                    if [[ \"\$removed\" != \"\$pkg\" ]] && [[ \" \$explicit_list \" == *\" \$removed \"* ]]; then
-                        conflict=true
-                        break
-                    fi
-                done
-
-                if [[ \"\$conflict\" == true ]]; then
-                    echo -e \"\${RED}Would remove other explicit packages\${RESET}\"
-                else
+                if removal_list=\$(pacman -Rsp \"\$pkg\" 2>/dev/null); then
+                    removed_count=\$(echo \"\$removal_list\" | wc -l)
                     echo -e \"Would remove \${YELLOW}\$removed_count\${RESET} total packages\"
-                fi
-                echo
-                echo -e \"\${BOLD}Dependencies to be removed:\${RESET}\"
-                echo \"\$removal_list\" | head -30 | sed 's/^/  /'
-                if [[ \"\$removed_count\" -gt 30 ]]; then
-                    echo \"  ... and \$((\$removed_count - 30)) more\"
+                    echo
+                    echo -e \"\${BOLD}Dependencies to be removed:\${RESET}\"
+                    echo \"\$removal_list\" | head -30 | sed 's/^/  /'
+                    if [[ \"\$removed_count\" -gt 30 ]]; then
+                        echo \"  ... and \$((\$removed_count - 30)) more\"
+                    fi
+                else
+                    echo -e \"\${RED}Required by other packages\${RESET} (-Rnsc would remove them too):\"
+                    echo \"\$removal_list\" | sed -n 's/.*required by /  /p' | sort -u | head -30
                 fi
                 echo
                 echo -e \"\${BOLD}Installed:\${RESET}\"
@@ -907,50 +986,13 @@ browse_explicit_packages() {
                 echo -e \"\${BOLD}Size:\${RESET}\"
                 echo \"\$pkg_info\" | grep 'Installed Size' | cut -d':' -f2- | sed 's/^/  /'
             " \
-            --preview-window="right:${preview_width}%:wrap" \
-            --header="Browse explicitly installed packages | Enter to view details | Ctrl+C to return
-Alt+[ increase preview | Alt+] decrease preview" \
-            --bind 'resize:refresh-preview' \
-            "${FZF_RESIZE_BINDS[@]}" \
             --ansi)
 
         if [[ -z "$selected_package" ]]; then
             return
         fi
 
-        clear_screen
-        echo "${BOLD}${CYAN}Package: $selected_package${RESET}"
-        echo "Description: $(pacman -Qi "$selected_package" | grep "Description" | cut -d":" -f2-)"
-        echo
-        echo "${BOLD}${YELLOW}Removal Impact:${RESET}"
-
-        removal_list=$(pacman -Rsp "$selected_package" 2>/dev/null)
-        removed_count=$(echo "$removal_list" | wc -l)
-
-        explicit_list=$(pacman -Qeq | tr '\n' ' ')
-
-        conflict=false
-        for removed in $removal_list; do
-            if [[ "$removed" != "$selected_package" ]] && [[ " $explicit_list " == *" $removed "* ]]; then
-                conflict=true
-                break
-            fi
-        done
-
-        if [[ "$conflict" == true ]]; then
-            echo -e "${RED}Would remove other explicitly installed packages${RESET}"
-        else
-            echo -e "Would remove ${YELLOW}$removed_count${RESET} total packages"
-        fi
-
-        echo
-        echo "${BOLD}Dependencies to be removed:${RESET}"
-        echo "$removal_list" | sed 's/^/  /'
-        echo
-        echo "${BOLD}Install Information:${RESET}"
-        pacman -Qi "$selected_package" | grep -E "Install Reason|Install Date|Installed Size" | sed 's/^/  /'
-        echo
-        read -p "Press any key to continue or Ctrl+C to return... " -n 1 -s -r
+        package_actions "$selected_package"
     done
 }
 
@@ -1215,9 +1257,9 @@ Alt+[ increase preview | Alt+] decrease preview"
         case "$selected_option" in
             "All Orphans [Auto]"*)
                 echo "Performing quick removal..."
-                [[ -n "$orphan_data" ]] && sudo pacman -Rns $orphan_data --noconfirm 2>/dev/null
+                [[ -n "$orphan_data" ]] && sudo pacman -Rns $orphan_data --noconfirm
                 dep_pkgs=$(pacman -Qqd 2>/dev/null)
-                [[ -n "$dep_pkgs" ]] && sudo pacman -Rsu $dep_pkgs --noconfirm 2>/dev/null
+                [[ -n "$dep_pkgs" ]] && sudo pacman -Rsu $dep_pkgs --noconfirm
                 echo "Removal complete."
                 ;;
             "Orphaned Only"*)
@@ -1255,7 +1297,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 esac
 
                 dep_pkgs=$(pacman -Qqd 2>/dev/null)
-                [[ -n "$dep_pkgs" ]] && sudo pacman -Rsu $dep_pkgs 2>/dev/null
+                [[ -n "$dep_pkgs" ]] && sudo pacman -Rsu $dep_pkgs
                 ;;
             "Both Types"*)
                 if [[ -z "$orphan_data" && -z "$unneeded_data" ]]; then
@@ -1284,7 +1326,7 @@ Alt+[ increase preview | Alt+] decrease preview"
 
                 [[ -n "$orphan_data" ]] && sudo pacman -Rns $orphan_data
                 dep_pkgs=$(pacman -Qqd 2>/dev/null)
-                [[ -n "$unneeded_data" && -n "$dep_pkgs" ]] && sudo pacman -Rsu $dep_pkgs 2>/dev/null
+                [[ -n "$unneeded_data" && -n "$dep_pkgs" ]] && sudo pacman -Rsu $dep_pkgs
                 ;;
         esac
 
@@ -1309,25 +1351,12 @@ downgrade() {
         clear_screen
 
         local packages="$1"
-        local preview_width=$(get_preview_width)
-
-        local header_text
-        if [[ $CLI_MODE -eq 1 ]]; then
-            header_text="Select package(s) to downgrade | Tab to multi-select | Enter to confirm | Ctrl+C to exit
-Alt+[ increase preview | Alt+] decrease preview"
-        else
-            header_text="Select package(s) to downgrade | Tab to multi-select | Enter to confirm | Ctrl+C to return
-Alt+[ increase preview | Alt+] decrease preview"
-        fi
 
         if [[ -z "$packages" ]]; then
+            spm_frame "Downgrade Packages" "Select package(s) to downgrade | Tab to multi-select | Enter to confirm | Ctrl+C to return"
             packages=$(pacman -Qq | fzf --reverse --multi \
-                --style=full:line \
-                --no-highlight-line \
-                --cycle \
+                "${SPM_FRAME[@]}" \
                 --scrollbar='█' \
-                --preview-border=line \
-                --border-label=" Downgrade Packages " \
                 --preview '
 
                     echo -e "${BOLD}${YELLOW}⬇ Downgrade: {}${RESET}"
@@ -1335,10 +1364,6 @@ Alt+[ increase preview | Alt+] decrease preview"
                     echo -e "${BOLD}${CYAN}Current Package Version${RESET}"
                     pacman -Qi {} 2>/dev/null || echo "Package not found"
                 ' \
-                --preview-window="right:$preview_width%:wrap" \
-                --header="$header_text" \
-                --bind 'resize:refresh-preview' \
-                "${FZF_RESIZE_BINDS[@]}" \
                 --ansi)
 
             if [[ -z "$packages" ]]; then
@@ -1407,15 +1432,11 @@ Alt+[ increase preview | Alt+] decrease preview"
             echo "Total available versions: ${#candidates[@]}"
             echo
 
-            preview_width=$(get_preview_width)
 
+            spm_frame "Select Version for $package" "Select a version to downgrade $package | Enter to confirm | Ctrl+C to skip"
             local selected_version=$(printf '%s\n' "${candidates[@]}" | fzf --reverse \
-                --style=full:line \
-                --no-highlight-line \
+                "${SPM_FRAME[@]}" \
                 --scrollbar='█' \
-                --preview-border=line \
-                --cycle \
-                --border-label=" Select Version for $package " \
                 --preview "
 
                     echo -e \"\${BOLD}\${YELLOW}⬇ Downgrading: $package\${RESET}\"
@@ -1439,11 +1460,6 @@ Alt+[ increase preview | Alt+] decrease preview"
                         pacman -Qip \"\$version\" 2>/dev/null || echo 'Details not available'
                     fi
                 " \
-                --preview-window="right:$preview_width%:wrap" \
-                --header="Select a version to downgrade $package | Enter to confirm | Ctrl+C to skip
-Alt+[ increase preview | Alt+] decrease preview" \
-                --bind 'resize:refresh-preview' \
-                "${FZF_RESIZE_BINDS[@]}" \
                 --ansi)
 
             if [[ -z "$selected_version" ]]; then
@@ -1468,6 +1484,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
                         if [[ $install_result -eq 0 ]]; then
                             echo
                             echo "${BOLD}${GREEN}✓${RESET} Downgrade completed for $package."
+                            offer_hold_package "$package"
                         else
                             echo
                             echo "Downgrade failed for $package."
@@ -1484,6 +1501,7 @@ Alt+[ increase preview | Alt+] decrease preview" \
                     if [[ $? -eq 0 ]]; then
                         echo
                         echo "${BOLD}${GREEN}✓${RESET} Downgrade completed for $package."
+                        offer_hold_package "$package"
                     else
                         echo
                         echo "Downgrade failed for $package."
@@ -1873,9 +1891,12 @@ Alt+[ increase preview | Alt+] decrease preview"
             echo "The following files will be deleted:"
             echo "$pacnew_files"
             echo
-            local confirm
-            read -p "Delete all .pacnew files? [y/N]: " confirm
-            if [[ "$confirm" =~ ^[Yy]$ ]]; then
+            spm_confirm "Delete all .pacnew files? [y/N]" n
+            local rc=$?
+            if [[ $rc -eq 130 ]]; then
+                handle_cancel
+                continue
+            elif [[ $rc -eq 0 ]]; then
                 echo "$pacnew_files" | while read -r f; do
                     sudo rm -v "$f"
                 done
@@ -1899,9 +1920,12 @@ Alt+[ increase preview | Alt+] decrease preview"
             echo
             echo "WARNING: Your current configurations will be overwritten!"
             echo
-            local confirm
-            read -p "Apply all .pacnew files? [y/N]: " confirm
-            if [[ "$confirm" =~ ^[Yy]$ ]]; then
+            spm_confirm "Apply all .pacnew files? [y/N]" n
+            local rc=$?
+            if [[ $rc -eq 130 ]]; then
+                handle_cancel
+                continue
+            elif [[ $rc -eq 0 ]]; then
                 echo "$pacnew_files" | while read -r f; do
                     local orig="${f%.pacnew}"
                     sudo mv -v "$f" "$orig"
@@ -1924,9 +1948,12 @@ Alt+[ increase preview | Alt+] decrease preview"
             echo "The following backup files will be deleted:"
             echo "$pacsave_files"
             echo
-            local confirm
-            read -p "Delete all .pacsave files? [y/N]: " confirm
-            if [[ "$confirm" =~ ^[Yy]$ ]]; then
+            spm_confirm "Delete all .pacsave files? [y/N]" n
+            local rc=$?
+            if [[ $rc -eq 130 ]]; then
+                handle_cancel
+                continue
+            elif [[ $rc -eq 0 ]]; then
                 echo "$pacsave_files" | while read -r f; do
                     sudo rm -v "$f"
                 done
@@ -2021,7 +2048,10 @@ Alt+[ increase preview | Alt+] decrease preview"
         echo
 
         local choice
-        read -p "Choice [1-4]: " choice
+        choice=$(spm_read_input "Choice [1-4]: ") || {
+            handle_cancel
+            continue
+        }
 
         case $choice in
             1)
@@ -2042,9 +2072,9 @@ Alt+[ increase preview | Alt+] decrease preview"
                 ;;
             3)
                 if command -v nvim > /dev/null; then
-                    sudo nvim -d "$original" "$file"
+                    SUDO_EDITOR="nvim -d" sudoedit "$original" "$file"
                 elif command -v vim > /dev/null; then
-                    sudo vimdiff "$original" "$file"
+                    SUDO_EDITOR="vim -d" sudoedit "$original" "$file"
                 else
                     echo "No diff editor available (nvim or vim required)."
                     sleep 2
@@ -2215,7 +2245,10 @@ Alt+[ increase preview | Alt+] decrease preview"
             echo
 
             local hook_name
-            read -p "Enter hook name (without .hook extension): " hook_name
+            hook_name=$(spm_read_input "Enter hook name (without .hook extension): ") || {
+                handle_cancel
+                continue
+            }
 
             if [[ -z "$hook_name" ]]; then
                 echo "No name provided. Cancelled."
@@ -2255,16 +2288,7 @@ Exec = /bin/true
             echo "Opening in editor..."
             sleep 1
 
-            if command -v nvim > /dev/null; then
-                sudo nvim "$hook_path"
-            elif command -v vim > /dev/null; then
-                sudo vim "$hook_path"
-            elif command -v nano > /dev/null; then
-                sudo nano "$hook_path"
-            else
-                echo "No editor available."
-                sleep 2
-            fi
+            spm_sudoedit "$hook_path"
             continue
         fi
 
@@ -2305,7 +2329,10 @@ Exec = /bin/true
             echo "5) Back"
 
             local action
-            read -p "Choice [1-5]: " action
+            action=$(spm_read_input "Choice [1-5]: ") || {
+                handle_cancel
+                continue
+            }
 
             case $action in
                 1)
@@ -2318,21 +2345,15 @@ Exec = /bin/true
                     echo
                     ;;
                 2)
-                    if command -v nvim > /dev/null; then
-                        sudo nvim "$hook_file"
-                    elif command -v vim > /dev/null; then
-                        sudo vim "$hook_file"
-                    elif command -v nano > /dev/null; then
-                        sudo nano "$hook_file"
-                    else
-                        echo "No editor available."
-                        sleep 2
-                    fi
+                    spm_sudoedit "$hook_file"
                     ;;
                 3)
-                    local confirm
-                    read -p "Delete $hook_name? [y/N]: " confirm
-                    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                    spm_confirm "Delete $hook_name? [y/N]" n
+                    local rc=$?
+                    if [[ $rc -eq 130 ]]; then
+                        handle_cancel
+                        continue
+                    elif [[ $rc -eq 0 ]]; then
                         sudo rm "$hook_file"
                         echo "Hook deleted."
                         sleep 1
@@ -2365,7 +2386,10 @@ Exec = /bin/true
             echo "3) Back"
 
             local action
-            read -p "Choice [1-3]: " action
+            action=$(spm_read_input "Choice [1-3]: ") || {
+                handle_cancel
+                continue
+            }
 
             case $action in
                 1)
@@ -2378,6 +2402,11 @@ Exec = /bin/true
                     echo
                     ;;
                 2)
+                    if [[ -e "$user_hooks_dir/$hook_name" || -e "$user_hooks_dir/$hook_name.disabled" ]]; then
+                        echo "A user hook named $hook_name already exists. Not overwriting."
+                        sleep 2
+                        continue
+                    fi
                     sudo mkdir -p "$user_hooks_dir"
                     sudo cp "$hook_file" "$user_hooks_dir/"
                     echo "Copied to: $user_hooks_dir/$hook_name"
@@ -2427,13 +2456,87 @@ get_option_description() {
     esac
 }
 
+# Prints "<active|commented><TAB><active line count><TAB><value>" for an option in [options]
+pacman_option_state() {
+    awk -v opt="$1" '
+        function is_opt(l) { return l ~ ("^" opt "([[:space:]]*=|[[:space:]]*$)") }
+        function value(l) { sub("^" opt "[[:space:]]*=?[[:space:]]*", "", l); return l }
+        /^[[:space:]]*#?[[:space:]]*\[/ { in_opts = ($0 ~ /^[[:space:]]*\[options\]/); next }
+        !in_opts { next }
+        {
+            l = $0
+            if (sub(/^[[:space:]]*#[[:space:]]*/, "", l)) {
+                if (is_opt(l) && !ncommented++) cval = value(l)
+            } else if (is_opt(l)) {
+                aval = nactive++ ? aval " " value(l) : value(l)
+            }
+        }
+        END {
+            if (nactive) printf "active\t%d\t%s\n", nactive, aval
+            else if (ncommented) printf "commented\t0\t%s\n", cval
+        }' /etc/pacman.conf
+}
+
+# Sets an option in [options], replacing its active line, else its first commented line.
+# With a third argument "append", the value is appended to the active line instead.
+set_pacman_option() {
+    local tmp="$SPM_TMPDIR/pacman.conf"
+    SPM_OPTION_VALUE="$2" awk -v opt="$1" -v append="${3:-}" '
+        function is_opt(l) { return l ~ ("^" opt "([[:space:]]*=|[[:space:]]*$)") }
+        { lines[NR] = $0 }
+        /^[[:space:]]*#?[[:space:]]*\[/ { in_opts = ($0 ~ /^[[:space:]]*\[options\]/); if (in_opts) header = NR; next }
+        in_opts {
+            l = $0
+            if (sub(/^[[:space:]]*#[[:space:]]*/, "", l)) { if (is_opt(l) && !first_commented) first_commented = NR }
+            else if (is_opt(l) && !first_active) first_active = NR
+        }
+        END {
+            target = first_active ? first_active : first_commented
+            for (i = 1; i <= NR; i++) {
+                if (i == target && append == "append" && i == first_active && lines[i] ~ /=/) {
+                    sub(/[[:space:]]+$/, "", lines[i])
+                    print lines[i] " " ENVIRON["SPM_OPTION_VALUE"]
+                }
+                else if (i == target) print opt " = " ENVIRON["SPM_OPTION_VALUE"]
+                else print lines[i]
+                if (!target && i == header) print opt " = " ENVIRON["SPM_OPTION_VALUE"]
+            }
+        }' /etc/pacman.conf > "$tmp" && [[ -s "$tmp" ]] && sudo cp "$tmp" /etc/pacman.conf
+}
+
+offer_hold_package() {
+    local package="$1" state count ignored
+    IFS=$'\t' read -r state count ignored < <(pacman_option_state IgnorePkg)
+    [[ "$state" == "active" && " $ignored " == *" $package "* ]] && return
+    echo
+    spm_confirm "Hold $package at this version by adding it to IgnorePkg? [y/N]" n || return
+    if set_pacman_option IgnorePkg "$package" append; then
+        echo "${GREEN}$package added to IgnorePkg.${RESET}"
+        echo "Release it later in System Tools → Pacman Configuration → IgnorePkg."
+    else
+        echo "Failed to update IgnorePkg. Check sudo privileges."
+    fi
+}
+
 edit_pacman_option() {
     local option="$1"
-    local current_value=$(grep "^#*$option" /etc/pacman.conf 2>/dev/null | sed 's/^#*//; s/.*=//; s/^[[:space:]]*//' | tail -n 1)
-    local new_value
+    local state count current_value new_value
+    IFS=$'\t' read -r state count current_value < <(pacman_option_state "$option")
 
     echo "Editing: $option"
-    echo "Current value: ${current_value:-Not set}"
+    if [[ "$state" == "active" && "$count" -gt 1 ]]; then
+        echo
+        echo "$option is set on $count separate lines in /etc/pacman.conf."
+        echo "Use \"Edit pacman.conf directly\" to change it without merging those lines."
+        echo
+        read -p "Press any key to continue... " -n 1 -s -r
+        return
+    fi
+    if [[ "$state" == "commented" ]]; then
+        echo "Current value: Not set (commented default: ${current_value:-none})"
+    else
+        echo "Current value: ${current_value:-Not set}"
+    fi
     echo
     echo "Description: $(get_option_description "$option")"
     echo
@@ -2457,14 +2560,10 @@ edit_pacman_option() {
     rm -f "$_edit_tmp"
 
     if [[ -n "$new_value" && "$new_value" != "$current_value" ]]; then
-        new_value_escaped=$(echo "$new_value" | sed 's/[\/&]/\\&/g')
-
-        if grep -q "^#*$option" /etc/pacman.conf; then
-            sudo sed -i "s|^#*$option.*|$option = $new_value_escaped|" /etc/pacman.conf
-            echo "$option updated to: $new_value"
+        if set_pacman_option "$option" "$new_value"; then
+            echo "$option set to: $new_value"
         else
-            sudo sed -i "/^\[options\]/a $option = $new_value_escaped" /etc/pacman.conf
-            echo "$option added with value: $new_value"
+            echo "Failed to update $option. Check sudo privileges."
         fi
     else
         echo "No changes made to $option"
@@ -2503,7 +2602,7 @@ toggle_pacman_option_with_confirmation() {
         return
     }
 
-    if [[ $confirm =~ ^[Yy]$ ]]; then
+    if [[ $confirm =~ ^[Yy]([Ee][Ss])?$ ]]; then
         if [[ "$new_status" == "enable" ]]; then
             if grep -q "^#$option" /etc/pacman.conf; then
                 sudo sed -i "s/^#$option/$option/" /etc/pacman.conf
@@ -2574,14 +2673,14 @@ manage_repositories() {
         return
     fi
 
+    spm_frame "Manage Repositories" "Select repositories to toggle | Tab to multi-select | Enter to confirm | Ctrl+C to return"
     local selected_repos=$(echo -e "$options" | fzf --reverse --multi \
-        --style=full:line \
-        --no-highlight-line \
+        "${SPM_FRAME[@]}" \
         --scrollbar='█' \
-        --preview-border=line \
-        --border-label=" Manage Repositories " \
-        --header="Select repositories to toggle | Tab to multi-select | Enter to confirm | Ctrl+C to return" \
-        --bind 'resize:refresh-preview' \
+        --preview '
+            repo=$(echo {} | sed "s/^\[[A-Z]*\] *//")
+            awk -v r="$repo" "{ l = \$0; sub(/^#/, \"\", l) } l ~ /^\\[/ { show = (index(l, \"[\" r \"]\") == 1) } show" /etc/pacman.conf
+        ' \
         --ansi \
         | sed 's/^\[.*\] *//')
 
@@ -2645,23 +2744,7 @@ edit_pacman_conf_directly() {
     echo "Opening pacman.conf for editing..."
     echo
 
-    if command -v nvim > /dev/null; then
-        sudo nvim /etc/pacman.conf
-    elif command -v vim > /dev/null; then
-        sudo vim /etc/pacman.conf
-    elif command -v vi > /dev/null; then
-        sudo vi /etc/pacman.conf
-    elif command -v emacs > /dev/null; then
-        sudo emacs /etc/pacman.conf
-    elif command -v nano > /dev/null; then
-        sudo nano /etc/pacman.conf
-    elif command -v micro > /dev/null; then
-        sudo micro /etc/pacman.conf
-    else
-        echo "No suitable editor found. Please manually edit /etc/pacman.conf."
-        read -p "Press any key to continue... " -n 1 -s -r
-        return 1
-    fi
+    spm_sudoedit /etc/pacman.conf || return 1
 
     echo "Editing complete."
 }
@@ -2716,7 +2799,7 @@ Alt+[ increase preview | Alt+] decrease preview"
 
         local preview_width=$(get_preview_width)
 
-        export -f get_option_description
+        export -f get_option_description pacman_option_state
 
         local selected_option=$(printf '%s\n' "${options[@]}" |
             fzf --reverse \
@@ -2736,11 +2819,11 @@ Alt+[ increase preview | Alt+] decrease preview"
                     echo
 
                     current_val=""
-                    if grep -q "^$opt" /etc/pacman.conf 2>/dev/null; then
-                        current_val=$(grep "^$opt" /etc/pacman.conf | sed "s/.*=//; s/^[[:space:]]*//" | tail -n 1)
-                        current_val="${current_val:-Enabled - no value}"
+                    IFS=$'"'"'\t'"'"' read -r state count value < <(pacman_option_state "$opt")
+                    if [[ "$state" == active ]]; then
+                        current_val="${value:-Enabled - no value}"
                         echo -e "${BOLD}${GREEN}Status: ENABLED${RESET}"
-                    elif grep -q "^#$opt" /etc/pacman.conf 2>/dev/null; then
+                    elif [[ "$state" == commented ]]; then
                         current_val="Disabled - commented out"
                         echo -e "${BOLD}${YELLOW}Status: DISABLED${RESET}"
                     else
@@ -2819,14 +2902,11 @@ file_search() {
             }
         fi
 
-        local preview_width=$(get_preview_width)
 
+        spm_frame "File Search" "Type a file name to search repo packages | Enter on a package to install | Ctrl+C to return"
         local selected=$(fzf --reverse < /dev/null \
-            --style=full:line \
-            --no-highlight-line \
+            "${SPM_FRAME[@]}" \
             --scrollbar='█' \
-            --preview-border=line \
-            --border-label=" File Search " \
             --disabled \
             --prompt 'File search> ' \
             --bind 'change:reload:if [ -n {q} ]; then pacman -F {q} 2>/dev/null; fi' \
@@ -2843,11 +2923,6 @@ file_search() {
                     pacman -Si "$pkg" 2>/dev/null || echo "No package information available."
                 fi
             ' \
-            --preview-window="right:$preview_width%:wrap" \
-            --header="Type a file name to search repo packages | Enter on a package to install | Ctrl+C to return
-Alt+[ increase preview | Alt+] decrease preview" \
-            --bind 'resize:refresh-preview' \
-            "${FZF_RESIZE_BINDS[@]}" \
             --ansi)
 
         if [[ -z "$selected" ]]; then
@@ -3054,6 +3129,8 @@ manager() {
         exit 0
     }
 
+    package_list_stale "$PACKAGE_LIST_CACHE" && refresh_package_list_in_background
+
     while true; do
         tac /var/log/pacman.log 2>/dev/null | awk '
             /\[ALPM\] upgraded/ { gsub(/[()]/, "", $4); if (!up[$4]++) { print $4; if (++c >= 50) exit } }' > "$recent_updated"
@@ -3124,6 +3201,10 @@ case "${1:-}" in
         echo "spm $SPM_VERSION"
         exit 0
         ;;
+    -h|--help)
+        show_help
+        exit 0
+        ;;
 esac
 
 check_dependencies
@@ -3174,10 +3255,6 @@ else
             ;;
         -f|files)
             file_search
-            exit 0
-            ;;
-        -h|--help)
-            show_help
             exit 0
             ;;
         *)

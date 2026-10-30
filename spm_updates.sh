@@ -3,6 +3,8 @@ CACHE_FILE="/var/cache/spm/update-cache.txt"
 DETAILED_CACHE_FILE="/var/cache/spm/detailed-update-cache.txt"
 PACKAGE_LIST_CACHE="/var/cache/spm/package-list-cache.txt"
 HEADER_CACHE_FILE="/var/cache/spm/header-cache.txt"
+# Private sync DB so checking for updates never syncs the real one (avoids partial upgrades)
+SYNC_DB="/var/lib/spm/db"
 
 CACHE_DIR=$(dirname "$CACHE_FILE")
 mkdir -p "$CACHE_DIR"
@@ -17,14 +19,23 @@ else
     exit 1
 fi
 
-pacman -Sy > /dev/null 2>&1
+mkdir -p "$SYNC_DB/sync"
+chmod 755 "$(dirname "$SYNC_DB")" "$SYNC_DB" "$SYNC_DB/sync"
+ln -sfn /var/lib/pacman/local "$SYNC_DB/local"
+cp -pu /var/lib/pacman/sync/*.db "$SYNC_DB/sync/" 2>/dev/null
+pacman -Sy --dbpath "$SYNC_DB" --logfile /dev/null > /dev/null 2>&1
 
-updates=$(pacman -Qu 2>/dev/null | grep -v '\[ignored\]' | wc -l)
+pending=$(pacman -Qu --dbpath "$SYNC_DB" 2>/dev/null | grep -v '\[ignored\]')
+if [ -n "$pending" ]; then
+    updates=$(printf '%s\n' "$pending" | wc -l)
+else
+    updates=0
+fi
 
 echo "$updates" > "$CACHE_FILE"
 
 if [ "$updates" -gt 0 ]; then
-    pacman -Qu 2>/dev/null | grep -v '\[ignored\]' > "$DETAILED_CACHE_FILE"
+    printf '%s\n' "$pending" > "$DETAILED_CACHE_FILE"
 else
     echo "No updates available." > "$DETAILED_CACHE_FILE"
 fi

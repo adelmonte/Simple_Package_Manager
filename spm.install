@@ -23,3 +23,7 @@ pre_remove() {
     systemctl disable --now spm_updates.timer 2>/dev/null || true
     echo "==> SPM timer disabled"
 }
+
+post_remove() {
+    rm -rf /var/lib/spm
+}
