@@ -1116,6 +1116,11 @@ Alt+[ increase preview | Alt+] decrease preview" \
     done
 }
 
+# Dependencies that pacman -Rsu would actually remove, so it isn't handed packages it keeps
+list_unneeded_packages() {
+    pacman -Qqd 2>/dev/null | xargs -r pacman -Rsu --print --print-format '%n' 2>/dev/null | grep -E '^[a-z0-9@._+-]+$'
+}
+
 orphan() {
     while true; do
         local preview_width=$(get_preview_width)
@@ -1146,7 +1151,7 @@ Alt+[ increase preview | Alt+] decrease preview"
 
         pacman -Qdtq 2>/dev/null > "$orphan_tmp_a" &
         local pid1=$!
-        (pacman -Qqd 2>/dev/null | xargs -r pacman -Rsu --print 2>/dev/null | grep "^  " | awk '{print $1}') > "$orphan_tmp_b" &
+        list_unneeded_packages > "$orphan_tmp_b" &
         local pid2=$!
         wait $pid1 $pid2
 
@@ -1258,7 +1263,7 @@ Alt+[ increase preview | Alt+] decrease preview"
             "All Orphans [Auto]"*)
                 echo "Performing quick removal..."
                 [[ -n "$orphan_data" ]] && sudo pacman -Rns $orphan_data --noconfirm
-                dep_pkgs=$(pacman -Qqd 2>/dev/null)
+                dep_pkgs=$(list_unneeded_packages)
                 [[ -n "$dep_pkgs" ]] && sudo pacman -Rsu $dep_pkgs --noconfirm
                 echo "Removal complete."
                 ;;
@@ -1296,7 +1301,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                     1) echo "Operation cancelled."; sleep 1; continue ;;
                 esac
 
-                dep_pkgs=$(pacman -Qqd 2>/dev/null)
+                dep_pkgs=$(list_unneeded_packages)
                 [[ -n "$dep_pkgs" ]] && sudo pacman -Rsu $dep_pkgs
                 ;;
             "Both Types"*)
@@ -1325,7 +1330,7 @@ Alt+[ increase preview | Alt+] decrease preview"
                 esac
 
                 [[ -n "$orphan_data" ]] && sudo pacman -Rns $orphan_data
-                dep_pkgs=$(pacman -Qqd 2>/dev/null)
+                dep_pkgs=$(list_unneeded_packages)
                 [[ -n "$unneeded_data" && -n "$dep_pkgs" ]] && sudo pacman -Rsu $dep_pkgs
                 ;;
         esac
