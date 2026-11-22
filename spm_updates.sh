@@ -24,6 +24,7 @@ chmod 755 "$(dirname "$SYNC_DB")" "$SYNC_DB" "$SYNC_DB/sync"
 ln -sfn /var/lib/pacman/local "$SYNC_DB/local"
 cp -pu /var/lib/pacman/sync/*.db "$SYNC_DB/sync/" 2>/dev/null
 pacman -Sy --dbpath "$SYNC_DB" --logfile /dev/null > /dev/null 2>&1
+sync_status=$?
 
 pending=$(pacman -Qu --dbpath "$SYNC_DB" 2>/dev/null | grep -v '\[ignored\]')
 if [ -n "$pending" ]; then
@@ -80,5 +81,12 @@ explicit=$(pacman -Qeq | wc -l)
 echo "$packages $explicit" > "$HEADER_CACHE_FILE"
 chmod 666 "$HEADER_CACHE_FILE" 2>/dev/null
 
-printf 'cache refreshed (%d pacman updates pending)\n' "$updates"
+[ "$updates" -eq 1 ] && noun="update" || noun="updates"
+if [ "$sync_status" -ne 0 ]; then
+    printf 'cache refreshed (sync failed, counts may be stale)\n'
+elif [ "$updates" -gt 0 ]; then
+    printf 'cache refreshed (%d pacman %s pending)\n' "$updates" "$noun"
+else
+    printf 'cache refreshed\n'
+fi
 exit 0
